@@ -3,6 +3,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 // ─── Constantes ─────────────────────────────────────────────────
 
 const MIME_CANDIDATES_VIDEO = [
+  "video/mp4;codecs=h264,aac",
+  "video/mp4",
   "video/webm;codecs=vp9,opus",
   "video/webm;codecs=vp9",
   "video/webm;codecs=vp8,opus",
@@ -10,16 +12,14 @@ const MIME_CANDIDATES_VIDEO = [
   "video/webm;codecs=h264,opus",
   "video/webm;codecs=h264",
   "video/webm",
-  "video/mp4;codecs=h264,aac",
-  "video/mp4",
 ];
 
 const MIME_CANDIDATES_AUDIO = [
+  "audio/mp4",
   "audio/webm;codecs=opus",
   "audio/webm",
   "audio/ogg;codecs=opus",
   "audio/ogg",
-  "audio/mp4",
 ];
 
 const VIDEO_HIGH = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
@@ -36,10 +36,21 @@ function bestMime(candidates) {
 }
 
 function extFromMime(mime) {
-  if (mime.startsWith("audio/ogg")) return "ogg";
+  if (!mime) return "webm";
   if (mime.startsWith("audio/mp4")) return "m4a";
+  if (mime.startsWith("audio/ogg")) return "ogg";
   if (mime.startsWith("video/mp4")) return "mp4";
   return "webm";
+}
+
+function labelFromMime(mime, isVideo) {
+  if (!mime) return isVideo ? "WebM (fallback)" : "WebM (fallback)";
+  if (mime.startsWith("audio/mp4")) return "M4A (AAC)";
+  if (mime.startsWith("audio/ogg")) return "OGG Opus";
+  if (mime.startsWith("audio/webm")) return "WebM Opus";
+  if (mime.startsWith("video/mp4")) return "MP4 (H.264/AAC)";
+  if (mime.startsWith("video/webm")) return "WebM (VP8/VP9)";
+  return mime;
 }
 
 function ts() {
@@ -51,9 +62,95 @@ function ts() {
 function includesAudio(mode) { return mode === "audio" || mode === "audiovideo"; }
 function includesVideo(mode) { return mode === "video" || mode === "audiovideo"; }
 
-// ─── Composant ──────────────────────────────────────────────────
+// ─── Audio Visualizer ───────────────────────────────────────────
 
-export default function MediaRecorderApp() {
+function AudioVisualizer({ stream, active }) {
+  const canvasRef = useRef(null);
+  const rafRef = useRef(null);
+  const analyserRef = useRef(null);
+  const ctxRef = useRef(null);
+
+  useEffect(() => {
+    if (!active || !stream) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext("2d");
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
+      return;
+    }
+
+    const audioTracks = stream.getAudioTracks();
+    if (!audioTracks.length) return;
+
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      ctxRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.8;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      function draw() {
+        rafRef.current = requestAnimationFrame(draw);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const W = canvas.width, H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        analyser.getByteFrequencyData(data);
+        const barCount = data.length;
+        const barW = (W / barCount) * 0.75;
+        const gap = (W / barCount) * 0.25;
+
+        for (let i = 0; i < barCount; i++) {
+          const val = data[i] / 255;
+          const barH = Math.max(2, val * H * 0.9);
+          const x = i * (barW + gap);
+          const alpha = 0.5 + val * 0.5;
+          ctx.fillStyle = `rgba(196,168,124,${alpha})`;
+          ctx.beginPath();
+          ctx.roundRect
+            ? ctx.roundRect(x, H - barH, barW, barH, 2)
+            : ctx.rect(x, H - barH, barW, barH);
+          ctx.fill();
+        }
+      }
+      draw();
+    } catch (e) {
+      // Web Audio not available, silently skip
+    }
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (ctxRef.current) ctxRef.current.close().catch(() => {});
+    };
+  }, [active, stream]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={600}
+      height={80}
+      style={{
+        width: "100%",
+        height: 80,
+        borderRadius: 12,
+        background: "rgba(58,49,41,.06)",
+        display: "block",
+      }}
+    />
+  );
+}
+
+// ─── Composant principal ─────────────────────────────────────────
+
+export default function RecordStudio() {
   const [recState, setRecState] = useState(STATES.IDLE);
   const [mode, setMode] = useState("audiovideo");
   const [status, setStatus] = useState({ text: "Initialisation…", error: false });
@@ -62,6 +159,7 @@ export default function MediaRecorderApp() {
   const [selectedAudio, setSelectedAudio] = useState("");
   const [selectedVideo, setSelectedVideo] = useState("");
   const [playbackUrl, setPlaybackUrl] = useState(null);
+  const [currentMime, setCurrentMime] = useState("");
 
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
@@ -72,18 +170,15 @@ export default function MediaRecorderApp() {
   const playbackRef = useRef(null);
   const urlRef = useRef(null);
 
-  // ── Status helper ──
   const info = (msg) => setStatus({ text: msg, error: false });
   const err = (msg) => setStatus({ text: msg, error: true });
 
-  // ── Enumerate devices ──
   const enumerate = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       err("Ce navigateur ne supporte pas l'accès aux périphériques média.");
       return;
     }
     try {
-      // Permission probe to get labels
       const tmp = await navigator.mediaDevices
         .getUserMedia({ audio: true, video: true })
         .catch(() => navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => navigator.mediaDevices.getUserMedia({ video: true })));
@@ -110,7 +205,6 @@ export default function MediaRecorderApp() {
     return () => navigator.mediaDevices?.removeEventListener("devicechange", h);
   }, [enumerate]);
 
-  // ── Cleanup on unmount ──
   useEffect(() => {
     return () => {
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
@@ -118,7 +212,6 @@ export default function MediaRecorderApp() {
     };
   }, []);
 
-  // ── Acquire stream ──
   async function acquireStream() {
     const constraints = {};
     if (includesAudio(mode)) {
@@ -158,9 +251,7 @@ export default function MediaRecorderApp() {
     if (liveRef.current) liveRef.current.srcObject = null;
   }
 
-  // ── Recording actions ──
   async function handleStart() {
-    // Cleanup previous
     if (urlRef.current) { URL.revokeObjectURL(urlRef.current); urlRef.current = null; }
     blobRef.current = null;
     setPlaybackUrl(null);
@@ -175,6 +266,7 @@ export default function MediaRecorderApp() {
 
     const candidates = includesVideo(mode) ? MIME_CANDIDATES_VIDEO : MIME_CANDIDATES_AUDIO;
     mimeRef.current = bestMime(candidates);
+    setCurrentMime(mimeRef.current);
 
     const opts = {};
     if (mimeRef.current) opts.mimeType = mimeRef.current;
@@ -249,38 +341,60 @@ export default function MediaRecorderApp() {
     document.body.removeChild(a);
   }
 
-  // ── Derived state ──
   const isActive = recState === STATES.RECORDING || recState === STATES.PAUSED;
   const hasBlob = !!playbackUrl;
   const showVideo = includesVideo(mode);
+  const showAudioViz = includesAudio(mode) && isActive && streamRef.current;
 
-  // ── Indicator dot ──
   const dotColor =
     recState === STATES.RECORDING ? "bg-red-500 animate-pulse" :
     recState === STATES.PAUSED ? "bg-amber-400" :
     "bg-neutral-500";
 
-  // ─── Render ───────────────────────────────────────────────────
+  const formatLabel = currentMime ? labelFromMime(currentMime, showVideo) : null;
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-start justify-center p-4 sm:p-8" style={{ fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <div
+      className="min-h-screen text-neutral-100 flex items-start justify-center p-4 sm:p-8"
+      style={{
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        background: "#FAF7F2",
+        color: "#3A3129",
+      }}
+    >
       <div className="w-full max-w-xl space-y-5">
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-2">
-          <div className={`w-3 h-3 rounded-full ${dotColor} shrink-0`} />
-          <h1 className="text-lg font-semibold tracking-tight">Enregistreur média</h1>
+          <div className={`w-3 h-3 rounded-full shrink-0 ${dotColor}`} />
+          <h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-.02em", color: "#3A3129", margin: 0 }}>
+            Enregistreur média
+          </h1>
+          {formatLabel && isActive && (
+            <span style={{
+              fontSize: 11, fontWeight: 600, letterSpacing: ".12em",
+              textTransform: "uppercase", color: "#A8895E",
+              background: "rgba(196,168,124,.15)", padding: "3px 9px",
+              borderRadius: 999, marginLeft: "auto"
+            }}>
+              {formatLabel}
+            </span>
+          )}
         </div>
 
         {/* Status */}
-        <div className={`text-sm px-3 py-2 rounded-lg ${status.error ? "bg-red-950/60 text-red-300 border border-red-800/50" : "bg-neutral-900 text-neutral-400 border border-neutral-800/60"}`}>
+        <div style={{
+          fontSize: 13, padding: "10px 14px", borderRadius: 12,
+          background: status.error ? "rgba(220,38,38,.08)" : "rgba(58,49,41,.06)",
+          color: status.error ? "#b91c1c" : "#7A6E63",
+          border: `1px solid ${status.error ? "rgba(220,38,38,.2)" : "rgba(107,91,78,.1)"}`,
+        }}>
           {status.text}
         </div>
 
         {/* Config selects */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Select
+          <RecSelect
             id="recordMode"
             label="Mode"
             value={mode}
@@ -292,7 +406,7 @@ export default function MediaRecorderApp() {
               { value: "audiovideo", label: "Audio + Vidéo" },
             ]}
           />
-          <Select
+          <RecSelect
             id="audioInputSelect"
             label="Micro"
             value={selectedAudio}
@@ -300,7 +414,7 @@ export default function MediaRecorderApp() {
             disabled={isActive || audioDevices.length === 0}
             options={audioDevices.length ? audioDevices.map((d, i) => ({ value: d.deviceId, label: d.label || `Micro ${i + 1}` })) : [{ value: "", label: "Aucun" }]}
           />
-          <Select
+          <RecSelect
             id="videoInputSelect"
             label="Caméra"
             value={selectedVideo}
@@ -310,41 +424,62 @@ export default function MediaRecorderApp() {
           />
         </div>
 
-        {/* Live preview */}
+        {/* Live video preview */}
         {showVideo && (
-          <div className="rounded-xl overflow-hidden border border-neutral-800 bg-black aspect-video">
+          <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid rgba(107,91,78,.12)", background: "#1a1a1a", aspectRatio: "16/9" }}>
             <video ref={liveRef} className="w-full h-full object-contain" playsInline muted />
+          </div>
+        )}
+
+        {/* Audio visualizer */}
+        {includesAudio(mode) && (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "#A69A8E", marginBottom: 8 }}>
+              Niveau audio
+            </div>
+            <AudioVisualizer stream={streamRef.current} active={isActive} />
+          </div>
+        )}
+
+        {/* Format info */}
+        {!isActive && !hasBlob && (
+          <div style={{ fontSize: 12, color: "#A69A8E", padding: "8px 12px", borderRadius: 10, background: "rgba(58,49,41,.04)", border: "1px solid rgba(107,91,78,.08)" }}>
+            {showVideo
+              ? "Format cible : MP4 (H.264/AAC). Selon votre navigateur, le format peut être WebM — le fichier restera lisible."
+              : "Format cible : M4A (AAC). Selon votre navigateur, le format peut être WebM — le fichier restera lisible."}
           </div>
         )}
 
         {/* Controls */}
         <div className="flex flex-wrap gap-2">
-          <Btn id="startRecordBtn" onClick={handleStart} disabled={isActive} accent>
+          <RecBtn id="startRecordBtn" onClick={handleStart} disabled={isActive} accent>
             ● Démarrer
-          </Btn>
-          <Btn id="pauseRecordBtn" onClick={handlePause} disabled={recState !== STATES.RECORDING}>
+          </RecBtn>
+          <RecBtn id="pauseRecordBtn" onClick={handlePause} disabled={recState !== STATES.RECORDING}>
             ❚❚ Pause
-          </Btn>
-          <Btn id="resumeRecordBtn" onClick={handleResume} disabled={recState !== STATES.PAUSED}>
+          </RecBtn>
+          <RecBtn id="resumeRecordBtn" onClick={handleResume} disabled={recState !== STATES.PAUSED}>
             ▶ Reprendre
-          </Btn>
-          <Btn id="stopRecordBtn" onClick={handleStop} disabled={!isActive} danger>
+          </RecBtn>
+          <RecBtn id="stopRecordBtn" onClick={handleStop} disabled={!isActive} danger>
             ■ Arrêter
-          </Btn>
-          <Btn id="downloadRecordBtn" onClick={handleDownload} disabled={!hasBlob}>
-            ↓ Télécharger
-          </Btn>
+          </RecBtn>
+          <RecBtn id="downloadRecordBtn" onClick={handleDownload} disabled={!hasBlob}>
+            ↓ Télécharger {hasBlob && formatLabel ? `(${labelFromMime(mimeRef.current, showVideo)})` : ""}
+          </RecBtn>
         </div>
 
         {/* Playback */}
         {playbackUrl && (
-          <div className="space-y-2">
-            <p className="text-xs text-neutral-500 uppercase tracking-wider font-medium">Lecture</p>
-            <div className="rounded-xl overflow-hidden border border-neutral-800 bg-black">
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "#A69A8E", marginBottom: 10 }}>
+              Lecture
+            </div>
+            <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid rgba(107,91,78,.12)", background: "#1a1a1a" }}>
               {showVideo ? (
                 <video ref={playbackRef} src={playbackUrl} controls className="w-full" />
               ) : (
-                <audio ref={playbackRef} src={playbackUrl} controls className="w-full py-4 px-2" />
+                <audio ref={playbackRef} src={playbackUrl} controls className="w-full" style={{ padding: "16px 8px", display: "block" }} />
               )}
             </div>
           </div>
@@ -356,16 +491,21 @@ export default function MediaRecorderApp() {
 
 // ─── Sub-components ─────────────────────────────────────────────
 
-function Select({ id, label, value, onChange, disabled, options }) {
+function RecSelect({ id, label, value, onChange, disabled, options }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs text-neutral-500 uppercase tracking-wider font-medium">{label}</span>
+    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "#A69A8E" }}>{label}</span>
       <select
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-neutral-600 disabled:opacity-40 disabled:cursor-not-allowed appearance-none"
+        style={{
+          background: "rgba(58,49,41,.06)", border: "1px solid rgba(107,91,78,.15)",
+          borderRadius: 10, padding: "8px 12px", fontSize: 13, color: "#3A3129",
+          fontFamily: "inherit", outline: "none", appearance: "none",
+          opacity: disabled ? .45 : 1, cursor: disabled ? "not-allowed" : "pointer",
+        }}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -375,15 +515,23 @@ function Select({ id, label, value, onChange, disabled, options }) {
   );
 }
 
-function Btn({ id, onClick, disabled, children, accent, danger }) {
-  const base = "px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-neutral-500 disabled:opacity-30 disabled:cursor-not-allowed";
+function RecBtn({ id, onClick, disabled, children, accent, danger }) {
+  const base = {
+    display: "inline-flex", alignItems: "center", gap: 6,
+    padding: "9px 18px", borderRadius: 999, fontSize: 13, fontWeight: 500,
+    cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit",
+    transition: "background .15s ease, transform .1s ease",
+    opacity: disabled ? .35 : 1,
+    border: "none",
+  };
   const variant = accent
-    ? "bg-red-600 hover:bg-red-500 text-white"
+    ? { background: "#C4A87C", color: "#fff" }
     : danger
-    ? "bg-neutral-800 hover:bg-red-900/60 text-red-300 border border-neutral-700"
-    : "bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700";
+    ? { background: "rgba(220,38,38,.1)", color: "#b91c1c", border: "1px solid rgba(220,38,38,.2)" }
+    : { background: "rgba(58,49,41,.08)", color: "#3A3129", border: "1px solid rgba(107,91,78,.12)" };
+
   return (
-    <button id={id} onClick={onClick} disabled={disabled} className={`${base} ${variant}`}>
+    <button id={id} onClick={onClick} disabled={disabled} style={{ ...base, ...variant }}>
       {children}
     </button>
   );
