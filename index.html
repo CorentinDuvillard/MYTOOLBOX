@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Toolbox — Studios créatifs</title>
+  <title>ToolBox — Vos outils en local</title>
 
-  <!-- React + Tailwind + Babel standalone (tous les studios s'appuient dessus) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -36,18 +35,22 @@
       padding: 22px clamp(20px, 5vw, 72px);
       border-bottom: 1px solid rgba(107,91,78,.08);
     }
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand {
+      display: flex; align-items: center; gap: 12px;
+      text-decoration: none; cursor: pointer;
+    }
     .brand-mark {
       width: 34px; height: 34px; border-radius: 10px;
       background: linear-gradient(135deg, var(--camel), var(--camel-dark));
       display: flex; align-items: center; justify-content: center;
-      color: #fff; font-weight: 600; letter-spacing: .5px; font-size: 14px;
+      color: #fff; font-weight: 700; letter-spacing: .5px; font-size: 14px;
+      flex-shrink: 0;
     }
     .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
-    .brand-name { font-size: 15px; font-weight: 600; color: var(--brown-deep); letter-spacing: -.01em; }
+    .brand-name { font-size: 15px; font-weight: 700; color: var(--brown-deep); letter-spacing: -.01em; }
     .brand-sub { font-size: 11px; color: var(--text-muted); letter-spacing: .04em; text-transform: uppercase; }
     .nav { display: flex; gap: 28px; font-size: 13.5px; color: var(--text-light); }
-    .nav a { color: inherit; text-decoration: none; transition: color .15s ease; }
+    .nav a { color: inherit; text-decoration: none; transition: color .15s ease; cursor: pointer; }
     .nav a:hover { color: var(--brown-dark); }
 
     .hero {
@@ -82,9 +85,18 @@
       padding: 28px;
       display: flex; flex-direction: column; gap: 14px;
       transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+      opacity: 0;
+      transform: translateY(18px);
+      animation: cardIn .45s ease forwards;
+    }
+    .card:nth-child(1) { animation-delay: .05s; }
+    .card:nth-child(2) { animation-delay: .13s; }
+    .card:nth-child(3) { animation-delay: .21s; }
+    @keyframes cardIn {
+      to { opacity: 1; transform: translateY(0); }
     }
     .card:hover {
-      transform: translateY(-2px);
+      transform: translateY(-3px);
       box-shadow: 0 18px 44px -26px rgba(58,49,41,.35);
       border-color: rgba(168,137,94,.28);
     }
@@ -127,6 +139,7 @@
       border-top: 1px solid rgba(107,91,78,.08);
       font-size: 12px; color: var(--text-muted);
       display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 8px;
     }
 
     .error-banner {
@@ -139,30 +152,81 @@
       font-size: 13px;
     }
 
-    /* ───── Studio stage (studio actif) ───── */
+    /* ───── À propos ───── */
+    .about-page {
+      min-height: 100vh; display: flex; flex-direction: column;
+      animation: fadeIn .35s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .about-body {
+      padding: clamp(48px, 8vw, 96px) clamp(20px, 5vw, 72px);
+      max-width: 720px;
+    }
+    .about-eyebrow {
+      font-size: 11px; font-weight: 600; letter-spacing: .18em;
+      text-transform: uppercase; color: var(--camel-dark); margin-bottom: 20px;
+    }
+    .about-title {
+      font-size: clamp(28px, 4vw, 44px); line-height: 1.1;
+      font-weight: 500; letter-spacing: -.018em;
+      color: var(--brown-deep); margin: 0 0 32px;
+    }
+    .about-section { margin-bottom: 40px; }
+    .about-section-title {
+      font-size: 12px; font-weight: 700; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--camel-dark);
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(107,91,78,.1);
+    }
+    .about-text {
+      font-size: 15px; line-height: 1.75; color: var(--text-light);
+    }
+    .about-text p { margin: 0 0 16px; }
+    .about-text p:last-child { margin-bottom: 0; }
+    .about-link {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 20px; border-radius: 999px;
+      background: var(--brown-deep); color: var(--cream);
+      text-decoration: none; font-size: 13px; font-weight: 500;
+      transition: background .15s ease, transform .1s ease;
+      margin-top: 8px;
+    }
+    .about-link:hover { background: var(--brown-dark); transform: translateY(-1px); }
+
+    /* ───── Studio stage ───── */
     .studio-stage {
       position: fixed; inset: 0; z-index: 10;
       background: var(--cream);
       overflow: hidden;
+      animation: fadeIn .25s ease;
     }
     .studio-mount { position: absolute; inset: 0; overflow: auto; }
     .studio-back {
       position: fixed; top: 14px; left: 14px; z-index: 1000;
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 9px 16px; border-radius: 999px;
+      padding: 8px 14px; border-radius: 999px;
       background: rgba(250,247,242,.92);
       color: var(--brown-deep);
       border: 1px solid rgba(107,91,78,.18);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      font-size: 13px; font-weight: 500; cursor: pointer;
+      font-size: 13px; font-weight: 700; cursor: pointer;
       font-family: inherit;
       box-shadow: 0 8px 22px -14px rgba(58,49,41,.5);
-      transition: background .15s ease, border-color .15s ease;
+      transition: background .15s ease, border-color .15s ease, transform .1s ease;
+      text-decoration: none;
     }
     .studio-back:hover {
       background: var(--cream);
       border-color: rgba(168,137,94,.35);
+      transform: translateY(-1px);
+    }
+    .studio-back-mark {
+      width: 22px; height: 22px; border-radius: 6px;
+      background: linear-gradient(135deg, var(--camel), var(--camel-dark));
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: 11px; flex-shrink: 0;
     }
     .studio-loader {
       position: fixed; inset: 0; z-index: 20;
@@ -179,24 +243,13 @@
 
     @media (max-width: 600px) {
       .nav { display: none; }
+      .footer { flex-direction: column; align-items: flex-start; gap: 4px; }
     }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
-  <!--
-    ───────────────────────────────────────────────────────────────
-    LOADER UNIVERSEL DE STUDIOS
-    Les trois studios mélangent deux styles d'export :
-      • Vision Studio  → expose déjà window.ImageEditor
-      • Record Studio  → `import … from "react"` + `export default`
-      • PDF Studio     → idem Record Studio
-    Babel standalone en script classique refuse les import/export
-    top-level. On les retire en amont, puis on transpile JSX et on
-    exécute dans un scope isolé ; seul `window[globalName]` ressort.
-    ───────────────────────────────────────────────────────────────
-  -->
   <script>
     window.__studioCache = window.__studioCache || {};
 
@@ -210,20 +263,16 @@
 
       let detected = null;
       let src = raw
-        // 1) retire les imports ES (seul "react" est utilisé dans ces fichiers)
         .replace(/^\s*import\s[\s\S]*?from\s+["'][^"']+["'];?\s*$/gm, "")
-        // 2) convertit `export default function X` en `function X`
         .replace(/export\s+default\s+function\s+(\w+)/, (_, n) => {
           detected = n;
           return "function " + n;
         })
-        // 3) supprime un éventuel `export default X;` résiduel
         .replace(/export\s+default\s+(\w+)\s*;?/, (_, n) => {
           if (!detected) detected = n;
           return "";
         });
 
-      // 4) shim des hooks React si le fichier ne les destruct pas déjà
       const hasHookShim = /const\s*\{[^}]*\buseState\b[^}]*\}\s*=\s*React/.test(src);
       if (!hasHookShim) {
         src =
@@ -231,12 +280,10 @@
           "useLayoutEffect, useReducer, useContext } = React;\n" + src;
       }
 
-      // 5) expose le composant racine sur window (si on l'a détecté)
       if (detected) {
         src += `\n;window[${JSON.stringify(globalName)}] = ${detected};`;
       }
 
-      // 6) transpile JSX → JS et exécute dans un scope isolé
       const out = Babel.transform(src, {
         presets: ["react"],
         filename: path,
@@ -252,11 +299,9 @@
     }
   </script>
 
-  <!-- ─── Shell applicatif : landing + host de studio ─── -->
   <script type="text/babel">
     const { useState, useCallback, useEffect } = React;
 
-    // Définition déclarative des studios disponibles
     const STUDIOS = [
       {
         id: "vision",
@@ -307,21 +352,26 @@
       },
     ];
 
-    function Landing({ onOpen, loadingId, error }) {
+    function BrandLogo({ onClick }) {
+      return (
+        <button className="brand" onClick={onClick} aria-label="Retour à l'accueil" style={{background:"none",border:"none",padding:0}}>
+          <div className="brand-mark">TB</div>
+          <div className="brand-text">
+            <span className="brand-name">ToolBox</span>
+            <span className="brand-sub">By Corentin Duvillard</span>
+          </div>
+        </button>
+      );
+    }
+
+    function Landing({ onOpen, loadingId, error, onAbout }) {
       return (
         <div className="landing">
           <header className="landing-header">
-            <div className="brand">
-              <div className="brand-mark">T</div>
-              <div className="brand-text">
-                <span className="brand-name">Toolbox</span>
-                <span className="brand-sub">Studio Suite</span>
-              </div>
-            </div>
+            <BrandLogo onClick={() => {}} />
             <nav className="nav">
               <a href="#studios">Studios</a>
-              <a href="#about">À propos</a>
-              <a href="https://github.com" target="_blank" rel="noreferrer">Source</a>
+              <a onClick={onAbout}>À propos</a>
             </nav>
           </header>
 
@@ -332,7 +382,7 @@
               directement depuis votre navigateur.
             </h1>
             <p className="hero-lead">
-              Toolbox rassemble trois studios légers — image, média et PDF —
+              ToolBox rassemble trois studios légers — image, média et PDF —
               dans une interface unifiée, sobre et sans installation.
             </p>
           </section>
@@ -361,14 +411,75 @@
           </section>
 
           <footer className="footer">
-            <span>© Toolbox — Suite créative locale</span>
-            <span>Tout s'exécute dans le navigateur.</span>
+            <span>© ToolBox — Studios locals</span>
+            <span>Tout vos outils en local</span>
           </footer>
         </div>
       );
     }
 
-    // Hôte du studio actif : monte dynamiquement le composant récupéré sur window
+    function AboutPage({ onHome }) {
+      return (
+        <div className="about-page">
+          <header className="landing-header">
+            <BrandLogo onClick={onHome} />
+            <nav className="nav">
+              <a onClick={onHome}>Studios</a>
+              <a style={{color:"var(--brown-deep)",fontWeight:600}}>À propos</a>
+            </nav>
+          </header>
+
+          <div className="about-body">
+            <div className="about-eyebrow">À propos</div>
+            <h1 className="about-title">À propos de ToolBox</h1>
+
+            <div className="about-section">
+              <div className="about-section-title">Le projet</div>
+              <div className="about-text">
+                <p>ToolBox est une boîte à outils gratuite destinée à toutes les personnes qui souhaitent disposer d'un ensemble d'outils pratiques, centralisés et accessibles sans abonnement.</p>
+                <p>Le projet a été conçu pour répondre à un besoin simple : disposer d'outils efficaces pour traiter des documents, enregistrer de l'audio, manipuler des fichiers et travailler plus rapidement depuis un seul espace.</p>
+              </div>
+            </div>
+
+            <div className="about-section">
+              <div className="about-section-title">Confidentialité & RGPD</div>
+              <div className="about-text">
+                <p>Tous les outils s'exécutent localement dans le navigateur. Cela signifie que les fichiers ne sont pas envoyés vers un serveur externe, ce qui limite les risques de perte de données et favorise un environnement respectueux de la confidentialité et du RGPD.</p>
+              </div>
+            </div>
+
+            <div className="about-section">
+              <div className="about-section-title">Le créateur</div>
+              <div className="about-text">
+                <p>ToolBox a été créé par Corentin Duvillard, étudiant en finance, travaillant quotidiennement sur ordinateur et confronté à la nécessité de traiter de nombreux documents. Les solutions existantes étaient souvent dispersées, limitées ou payantes. ToolBox vise donc à proposer une alternative centralisée, simple et gratuite.</p>
+              </div>
+              <a
+                href="https://www.linkedin.com/in/corentin-duvillard"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="about-link"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                LinkedIn — Corentin Duvillard
+              </a>
+            </div>
+
+            <div className="about-section">
+              <div className="about-section-title">Mentions légales</div>
+              <div className="about-text">
+                <p>Tous droits réservés — Corentin Duvillard.</p>
+              </div>
+            </div>
+          </div>
+
+          <footer className="footer">
+            <span>© ToolBox — Studios locals</span>
+            <span>Tout vos outils en local</span>
+          </footer>
+        </div>
+      );
+    }
+
     function StudioStage({ studio, onClose }) {
       const Comp = window[studio.global];
       useEffect(() => {
@@ -379,11 +490,9 @@
 
       return (
         <div className="studio-stage">
-          <button className="studio-back" onClick={onClose} aria-label="Retour aux studios">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-            Studios
+          <button className="studio-back" onClick={onClose} aria-label="Retour à l'accueil ToolBox">
+            <div className="studio-back-mark">TB</div>
+            ToolBox
           </button>
           <div className="studio-mount">
             {Comp ? React.createElement(Comp) : null}
@@ -393,6 +502,7 @@
     }
 
     function App() {
+      const [view, setView] = useState("landing");
       const [active, setActive] = useState(null);
       const [loadingId, setLoadingId] = useState(null);
       const [error, setError] = useState(null);
@@ -403,6 +513,7 @@
         try {
           await loadStudio(studio.path, studio.global);
           setActive(studio);
+          setView("studio");
         } catch (e) {
           setError(e && e.message ? e.message : String(e));
         } finally {
@@ -410,10 +521,12 @@
         }
       }, []);
 
-      const close = useCallback(() => setActive(null), []);
+      const goHome = useCallback(() => { setView("landing"); setActive(null); }, []);
+      const goAbout = useCallback(() => setView("about"), []);
 
-      if (active) return <StudioStage studio={active} onClose={close} />;
-      return <Landing onOpen={open} loadingId={loadingId} error={error} />;
+      if (view === "studio" && active) return <StudioStage studio={active} onClose={goHome} />;
+      if (view === "about") return <AboutPage onHome={goHome} />;
+      return <Landing onOpen={open} loadingId={loadingId} error={error} onAbout={goAbout} />;
     }
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
