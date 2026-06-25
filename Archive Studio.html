@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Décompression par lots</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#15110d; --bg-2:#1d1813; --surface:#241e17; --surface-2:#2c251c;
+    --line:#3a3228; --line-soft:#2a241c;
+    --text:#f1e9dc; --muted:#a39684; --faint:#6f6453;
+    --gold:#e0a458; --gold-soft:rgba(224,164,88,.13); --gold-line:rgba(224,164,88,.35);
+    --sage:#9bbd84; --sage-soft:rgba(155,189,132,.13);
+    --rust:#cf7152; --rust-soft:rgba(207,113,82,.13);
+    --r:14px; --r-sm:9px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(1200px 600px at 70% -10%, rgba(224,164,88,.06), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(155,189,132,.05), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+    padding:clamp(20px,4vw,52px) clamp(16px,4vw,40px);
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .wrap{max-width:920px;margin:0 auto}
+
+  /* Header */
+  header.top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .mark{
+    font-weight:700;font-size:clamp(22px,3.4vw,30px);letter-spacing:-.02em;
+    display:flex;align-items:center;gap:12px
+  }
+  .glyph{
+    width:30px;height:30px;flex:none;border-radius:8px;
+    border:1px solid var(--gold-line);background:var(--gold-soft);
+    display:grid;place-items:center;color:var(--gold);
+  }
+  .glyph svg{width:17px;height:17px}
+  .tag{
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint);
+    padding:3px 8px;border:1px solid var(--line);border-radius:99px;
+  }
+  .sub{color:var(--muted);font-size:14.5px;max-width:60ch;margin:14px 0 26px}
+
+  /* Dropzone */
+  .drop{
+    position:relative;border:1.5px dashed var(--line);border-radius:var(--r);
+    background:linear-gradient(180deg, var(--bg-2), var(--surface));
+    padding:40px 28px;text-align:center;cursor:pointer;
+    transition:border-color .18s ease, background .18s ease, transform .18s ease;
+  }
+  .drop:hover{border-color:var(--gold-line)}
+  .drop:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+  .drop.hot{border-color:var(--gold);background:var(--gold-soft);transform:translateY(-1px)}
+  .drop.compact{padding:16px 20px;text-align:left;display:flex;align-items:center;gap:16px}
+  .drop .bigicon{
+    width:54px;height:54px;margin:0 auto 14px;border-radius:13px;
+    border:1px solid var(--line);background:var(--surface-2);
+    display:grid;place-items:center;color:var(--gold);transition:all .18s ease;
+  }
+  .drop.compact .bigicon{width:40px;height:40px;margin:0;border-radius:10px}
+  .drop .bigicon svg{width:26px;height:26px}
+  .drop.compact .bigicon svg{width:20px;height:20px}
+  .drop.hot .bigicon{border-color:var(--gold-line)}
+  .drop h2{font-size:17px;font-weight:600;letter-spacing:-.01em}
+  .drop.compact .dz-text{flex:1}
+  .drop p{color:var(--muted);font-size:13.5px;margin-top:5px}
+  .drop .ext{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--faint);margin-top:12px;letter-spacing:.04em}
+  .drop.compact .ext{display:none}
+  .drop .more{
+    display:none;font-size:12.5px;color:var(--gold);font-weight:500;
+    border:1px solid var(--gold-line);background:var(--gold-soft);
+    padding:8px 14px;border-radius:var(--r-sm);white-space:nowrap;
+  }
+  .drop.compact .more{display:block}
+
+  /* Toolbar */
+  .toolbar{
+    display:none;align-items:center;gap:12px;flex-wrap:wrap;
+    margin-top:18px;padding:14px 16px;
+    border:1px solid var(--line);border-radius:var(--r);background:var(--bg-2);
+  }
+  .toolbar.show{display:flex}
+  .summary{font-size:13px;color:var(--muted);margin-right:auto}
+  .summary b{color:var(--text);font-family:'JetBrains Mono',monospace;font-weight:600}
+  .btn{
+    font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;
+    border:1px solid var(--line);background:var(--surface);color:var(--text);
+    padding:9px 15px;border-radius:var(--r-sm);display:inline-flex;align-items:center;gap:8px;
+    transition:border-color .15s ease, background .15s ease, color .15s ease;
+  }
+  .btn svg{width:15px;height:15px}
+  .btn:hover{border-color:var(--faint);background:var(--surface-2)}
+  .btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .btn.primary{background:var(--gold);border-color:var(--gold);color:#241a0c;font-weight:600}
+  .btn.primary:hover{background:#ecb56a;border-color:#ecb56a}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.45;cursor:default;pointer-events:none}
+
+  /* Toast */
+  .toast{
+    display:none;margin-top:14px;padding:11px 15px;border-radius:var(--r-sm);
+    font-size:13px;border:1px solid var(--line);background:var(--bg-2);color:var(--muted);
+  }
+  .toast.show{display:block}
+  .toast.warn{border-color:var(--gold-line);background:var(--gold-soft);color:#f0d4a8}
+  .toast .lead{color:var(--gold);font-weight:600;margin-right:6px}
+
+  /* List */
+  .list{margin-top:22px;display:flex;flex-direction:column;gap:12px}
+  .card{
+    border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
+    background:var(--surface);position:relative;
+    animation:slidein .26s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes slidein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--faint)}
+  .card.working::before{background:var(--gold);animation:pulse 1.3s ease-in-out infinite}
+  .card.done::before{background:var(--sage)}
+  .card.fail::before{background:var(--rust)}
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+  .head{
+    display:flex;align-items:center;gap:14px;padding:15px 18px 15px 20px;
+    cursor:pointer;user-select:none;
+  }
+  .head.nofiles{cursor:default}
+  .head:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+  .chev{flex:none;color:var(--faint);transition:transform .2s ease;width:16px;height:16px}
+  .head.nofiles .chev{visibility:hidden}
+  .card.open .chev{transform:rotate(90deg)}
+  .ficon{flex:none;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);
+    background:var(--surface-2);display:grid;place-items:center;color:var(--muted)}
+  .ficon svg{width:17px;height:17px}
+  .card.done .ficon{color:var(--sage);border-color:rgba(155,189,132,.3)}
+  .card.fail .ficon{color:var(--rust);border-color:rgba(207,113,82,.3)}
+  .meta{flex:1;min-width:0}
+  .fname{font-weight:600;font-size:14.5px;letter-spacing:-.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fstat{font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .fstat .dot{width:3px;height:3px;border-radius:99px;background:var(--faint)}
+  .badge{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;
+    text-transform:uppercase;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)
+  }
+  .card.working .badge{color:var(--gold);border-color:var(--gold-line);background:var(--gold-soft)}
+  .card.done .badge{color:var(--sage);border-color:rgba(155,189,132,.3);background:var(--sage-soft)}
+  .card.fail .badge{color:var(--rust);border-color:rgba(207,113,82,.3);background:var(--rust-soft)}
+  .iconbtn{
+    flex:none;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;
+    border:1px solid var(--line);background:var(--bg-2);color:var(--muted);
+    padding:7px 11px;border-radius:var(--r-sm);display:inline-flex;align-items:center;gap:6px;
+    transition:all .15s ease;
+  }
+  .iconbtn svg{width:13px;height:13px}
+  .iconbtn:hover{color:var(--text);border-color:var(--faint)}
+  .iconbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+  /* Tree */
+  .body{display:none;border-top:1px solid var(--line-soft);background:var(--bg-2);
+    max-height:340px;overflow:auto}
+  .card.open .body{display:block}
+  .tree{padding:10px 8px 12px}
+  .node{padding-left:14px}
+  .dirrow{display:flex;align-items:center;gap:7px;padding:5px 8px;color:var(--muted);font-size:13px}
+  .dirrow svg{width:14px;height:14px;color:var(--gold);opacity:.8;flex:none}
+  .filerow{
+    display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:6px;
+    cursor:pointer;color:var(--text);transition:background .12s ease;
+  }
+  .filerow:hover{background:var(--surface-2)}
+  .filerow:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+  .filerow .fi{width:14px;height:14px;color:var(--faint);flex:none}
+  .filerow .nm{font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .filerow .sz{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--faint);flex:none}
+  .filerow .dl{width:14px;height:14px;color:var(--gold);opacity:0;flex:none;transition:opacity .12s ease}
+  .filerow:hover .dl{opacity:1}
+  .errmsg{padding:14px 20px 16px 22px;color:var(--rust);font-size:13px;
+    border-top:1px solid var(--line-soft);background:var(--rust-soft)}
+
+  footer{margin-top:30px;padding-top:18px;border-top:1px solid var(--line-soft);
+    display:flex;gap:18px;flex-wrap:wrap;color:var(--faint);font-size:12px}
+  footer .pt{display:flex;align-items:center;gap:7px}
+  footer svg{width:13px;height:13px;color:var(--faint)}
+
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px;border:3px solid var(--bg-2)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none!important;transition:none!important}
+  }
+  @media (max-width:560px){
+    .summary{margin-right:0;width:100%}
+    .iconbtn .lbl{display:none}
+    .iconbtn{padding:8px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="mark">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v6M9 6l3 3 3-3"/><path d="M3 13l4 4h10l4-4"/><path d="M5 17v3a1 1 0 001 1h12a1 1 0 001-1v-3"/>
+        </svg>
+      </span>
+      Décompression par lots
+    </div>
+    <span class="tag">.zip</span>
+  </header>
+
+  <p class="sub">Déposez plusieurs archives .zip d'un coup, parcourez leur contenu, puis récupérez les fichiers. Tout est traité dans votre navigateur, rien n'est envoyé sur un serveur.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des archives zip">
+    <div class="bigicon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+      </svg>
+    </div>
+    <div class="dz-text">
+      <h2>Glissez vos archives ici</h2>
+      <p>ou cliquez pour les sélectionner</p>
+      <div class="ext">formats pris en charge : .zip</div>
+    </div>
+    <div class="more">+ ajouter</div>
+  </div>
+  <input type="file" id="file" accept=".zip,application/zip,application/x-zip-compressed" multiple hidden>
+
+  <div class="toolbar" id="toolbar">
+    <div class="summary" id="summary"></div>
+    <button class="btn primary" id="saveFolder" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      Enregistrer dans un dossier
+    </button>
+    <button class="btn" id="dlAll">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+      Tout télécharger
+    </button>
+    <button class="btn ghost" id="clear">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+      Effacer
+    </button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="list" id="list"></div>
+
+  <footer>
+    <span class="pt">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      Traitement 100% local
+    </span>
+    <span class="pt">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      Le format .rar et .7z n'est pas pris en charge
+    </span>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var archives = [];
+  var seq = 0;
+
+  var dropEl = document.getElementById('drop');
+  var fileEl = document.getElementById('file');
+  var listEl = document.getElementById('list');
+  var toolbarEl = document.getElementById('toolbar');
+  var summaryEl = document.getElementById('summary');
+  var clearBtn = document.getElementById('clear');
+  var dlAllBtn = document.getElementById('dlAll');
+  var saveFolderBtn = document.getElementById('saveFolder');
+  var toastEl = document.getElementById('toast');
+
+  var canPickDir = (typeof window.showDirectoryPicker === 'function');
+  if (canPickDir) saveFolderBtn.hidden = false;
+
+  // ---- helpers ----
+  function fmtSize(b){
+    if (b == null) return '';
+    if (b < 1024) return b + ' o';
+    var u = ['Ko','Mo','Go','To'], i = -1, n = b;
+    do { n /= 1024; i++; } while (n >= 1024 && i < u.length-1);
+    return (n < 10 ? n.toFixed(1) : Math.round(n)) + ' ' + u[i];
+  }
+  function stripExt(name){ return name.replace(/\.zip$/i, ''); }
+  function basename(p){ var s = p.split('/'); return s[s.length-1]; }
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function icon(svg){ return svg; }
+  function showToast(html, warn){
+    toastEl.innerHTML = html;
+    toastEl.className = 'toast show' + (warn ? ' warn' : '');
+  }
+  function hideToast(){ toastEl.className = 'toast'; }
+
+  // ---- intake ----
+  function addFiles(fileList){
+    var files = Array.prototype.slice.call(fileList);
+    if (!files.length) return;
+    hideToast();
+    files.forEach(function(f){
+      var entry = {
+        id: ++seq, name: f.name, size: f.size,
+        status: 'working', files: [], totalSize: 0, zip: null, error: null,
+        el: null, body: null, built: false
+      };
+      archives.push(entry);
+      renderCard(entry);
+      extract(entry, f);
+    });
+    refreshState();
+  }
+
+  function extract(entry, file){
+    JSZip.loadAsync(file).then(function(zip){
+      entry.zip = zip;
+      var arr = [];
+      zip.forEach(function(path, f){
+        if (f.dir) return;
+        if (/\/$/.test(path)) return;
+        var sz = (f._data && typeof f._data.uncompressedSize === 'number') ? f._data.uncompressedSize : null;
+        arr.push({ path: path, size: sz });
+      });
+      arr.sort(function(a,b){ return a.path.localeCompare(b.path, 'fr'); });
+      entry.files = arr;
+      entry.totalSize = arr.reduce(function(s,x){ return s + (x.size||0); }, 0);
+      entry.status = arr.length ? 'done' : 'empty';
+      updateCard(entry);
+      refreshState();
+    }).catch(function(err){
+      entry.status = 'fail';
+      entry.error = (file.name.toLowerCase().slice(-4) !== '.zip')
+        ? "Ce fichier n'est pas une archive .zip (extension inattendue)."
+        : "Archive illisible ou corrompue. JSZip n'a pas pu l'ouvrir.";
+      updateCard(entry);
+      refreshState();
+    });
+  }
+
+  // ---- rendering ----
+  var SVG = {
+    chev:'<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
+    box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>',
+    folder:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>',
+    file:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>',
+    dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>'
+  };
+
+  function badgeText(s){
+    return s === 'working' ? 'Extraction' : s === 'done' ? 'Terminé'
+         : s === 'empty' ? 'Vide' : s === 'fail' ? 'Échec' : '';
+  }
+
+  function renderCard(entry){
+    var card = document.createElement('div');
+    card.className = 'card working';
+    card.dataset.id = entry.id;
+    card.innerHTML =
+      '<div class="head nofiles" tabindex="0" role="button" aria-expanded="false">' +
+        SVG.chev +
+        '<span class="ficon">'+SVG.box+'</span>' +
+        '<div class="meta">' +
+          '<div class="fname"></div>' +
+          '<div class="fstat"></div>' +
+        '</div>' +
+        '<span class="badge"></span>' +
+      '</div>';
+    var head = card.querySelector('.head');
+    card.querySelector('.fname').textContent = entry.name;
+    updateStat(card, entry);
+
+    head.addEventListener('click', function(){ toggle(entry); });
+    head.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(entry); }
+    });
+
+    listEl.appendChild(card);
+    entry.el = card;
+  }
+
+  function updateStat(card, entry){
+    var stat = card.querySelector('.fstat');
+    var bits = [];
+    if (entry.status === 'done'){
+      bits.push('<span class="mono">'+entry.files.length+' fichier'+(entry.files.length>1?'s':'')+'</span>');
+      bits.push('<span class="dot"></span>');
+      bits.push('<span class="mono">'+fmtSize(entry.totalSize)+' décompressé</span>');
+    } else if (entry.status === 'empty'){
+      bits.push('Aucun fichier dans cette archive');
+    } else if (entry.status === 'fail'){
+      bits.push('<span class="mono">'+fmtSize(entry.size)+'</span>');
+    } else {
+      bits.push('<span class="mono">'+fmtSize(entry.size)+'</span>');
+      bits.push('<span class="dot"></span>');
+      bits.push('lecture en cours');
+    }
+    stat.innerHTML = bits.join('');
+  }
+
+  function updateCard(entry){
+    var card = entry.el; if (!card) return;
+    card.className = 'card ' + (entry.status === 'working' ? 'working'
+      : entry.status === 'done' ? 'done' : entry.status === 'empty' ? 'done' : 'fail')
+      + (card.classList.contains('open') ? ' open' : '');
+    card.querySelector('.badge').textContent = badgeText(entry.status);
+    updateStat(card, entry);
+
+    var head = card.querySelector('.head');
+    var hasFiles = entry.status === 'done' && entry.files.length > 0;
+    head.classList.toggle('nofiles', !hasFiles);
+
+    // attach per-archive download button once done
+    if (hasFiles && !card.querySelector('.iconbtn')){
+      var btn = document.createElement('button');
+      btn.className = 'iconbtn';
+      btn.innerHTML = SVG.dl + '<span class="lbl">Tout télécharger</span>';
+      btn.title = 'Télécharger tous les fichiers de cette archive';
+      btn.addEventListener('click', function(e){ e.stopPropagation(); downloadArchive(entry, btn); });
+      head.appendChild(btn);
+    }
+
+    if (entry.status === 'fail'){
+      if (!card.querySelector('.errmsg')){
+        var em = document.createElement('div');
+        em.className = 'errmsg';
+        em.textContent = entry.error || 'Erreur inconnue.';
+        card.appendChild(em);
+        card.classList.add('open');
+      }
+    }
+  }
+
+  function toggle(entry){
+    var card = entry.el;
+    if (card.querySelector('.head').classList.contains('nofiles') && entry.status !== 'fail') return;
+    var open = card.classList.toggle('open');
+    card.querySelector('.head').setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open && !entry.built && entry.status === 'done'){
+      buildTree(entry);
+      entry.built = true;
+    }
+  }
+
+  function buildTree(entry){
+    var root = { dirs:{}, files:[] };
+    entry.files.forEach(function(f){
+      var parts = f.path.split('/').filter(Boolean);
+      var name = parts.pop();
+      var node = root;
+      parts.forEach(function(p){
+        if (!node.dirs[p]) node.dirs[p] = { dirs:{}, files:[] };
+        node = node.dirs[p];
+      });
+      node.files.push({ name:name, path:f.path, size:f.size });
+    });
+
+    var body = document.createElement('div');
+    body.className = 'body';
+    var treeEl = document.createElement('div');
+    treeEl.className = 'tree';
+    treeEl.appendChild(renderNode(root, entry));
+    body.appendChild(treeEl);
+    entry.el.appendChild(body);
+  }
+
+  function renderNode(node, entry){
+    var frag = document.createElement('div');
+    var dirNames = Object.keys(node.dirs).sort(function(a,b){ return a.localeCompare(b,'fr'); });
+    dirNames.forEach(function(dn){
+      var wrap = document.createElement('div');
+      wrap.className = 'node';
+      var row = document.createElement('div');
+      row.className = 'dirrow';
+      row.innerHTML = SVG.folder + '<span>'+escapeHtml(dn)+'</span>';
+      wrap.appendChild(row);
+      wrap.appendChild(renderNode(node.dirs[dn], entry));
+      frag.appendChild(wrap);
+    });
+    node.files.forEach(function(f){
+      var row = document.createElement('div');
+      row.className = 'node';
+      var fr = document.createElement('div');
+      fr.className = 'filerow';
+      fr.setAttribute('tabindex','0');
+      fr.setAttribute('role','button');
+      fr.title = 'Télécharger ' + f.name;
+      fr.innerHTML = '<span class="fi">'+SVG.file+'</span>' +
+        '<span class="nm">'+escapeHtml(f.name)+'</span>' +
+        '<span class="sz">'+fmtSize(f.size)+'</span>' +
+        '<span class="dl">'+SVG.dl+'</span>';
+      fr.addEventListener('click', function(){ downloadOne(entry, f.path, f.name); });
+      fr.addEventListener('keydown', function(e){
+        if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); downloadOne(entry, f.path, f.name); }
+      });
+      row.appendChild(fr);
+      frag.appendChild(row);
+    });
+    return frag;
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  // ---- downloads ----
+  function downloadBlob(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+  }
+
+  function downloadOne(entry, path, name){
+    var f = entry.zip.file(path);
+    if (!f) return;
+    f.async('blob').then(function(blob){ downloadBlob(blob, name); });
+  }
+
+  function downloadArchive(entry, btn){
+    if (btn){ btn.disabled = true; var orig = btn.innerHTML; btn.innerHTML = SVG.dl+'<span class="lbl">...</span>'; }
+    var i = 0;
+    (function next(){
+      if (i >= entry.files.length){
+        if (btn){ btn.disabled = false; btn.innerHTML = orig; }
+        return;
+      }
+      var f = entry.files[i++];
+      entry.zip.file(f.path).async('blob').then(function(blob){
+        downloadBlob(blob, basename(f.path));
+        sleep(180).then(next);
+      });
+    })();
+  }
+
+  function downloadAll(){
+    var ready = archives.filter(function(a){ return a.status === 'done'; });
+    var queue = [];
+    ready.forEach(function(a){
+      a.files.forEach(function(f){ queue.push({ a:a, path:f.path }); });
+    });
+    if (!queue.length) return;
+    dlAllBtn.disabled = true;
+    var i = 0;
+    (function next(){
+      if (i >= queue.length){ dlAllBtn.disabled = false; return; }
+      var item = queue[i++];
+      item.a.zip.file(item.path).async('blob').then(function(blob){
+        downloadBlob(blob, basename(item.path));
+        sleep(180).then(next);
+      });
+    })();
+  }
+
+  // ---- save to a real folder (File System Access API) ----
+  function saveToFolder(){
+    var ready = archives.filter(function(a){ return a.status === 'done'; });
+    if (!ready.length) return;
+    var rootHandle;
+    window.showDirectoryPicker({ mode:'readwrite' }).then(function(root){
+      rootHandle = root;
+      saveFolderBtn.disabled = true;
+      showToast('<span class="lead">En cours</span> écriture des fichiers dans le dossier choisi.');
+      return writeAll(ready, root);
+    }).then(function(written){
+      saveFolderBtn.disabled = false;
+      showToast('<span class="lead">Terminé</span> '+written+' fichier'+(written>1?'s':'')+' écrit'+(written>1?'s':'')+' dans le dossier.');
+    }).catch(function(err){
+      saveFolderBtn.disabled = false;
+      if (err && err.name === 'AbortError'){ hideToast(); return; }
+      showToast('<span class="lead">Écriture impossible</span> la vue intégrée bloque l\'accès au disque. Ouvrez cet outil dans un onglet à part (bouton d\'ouverture en plein écran), ou utilisez « Tout télécharger ».', true);
+    });
+  }
+
+  function writeAll(ready, root){
+    var count = 0;
+    function dirHandle(parent, name){ return parent.getDirectoryHandle(name, { create:true }); }
+    function chain(promise, fn){ return promise.then(fn); }
+
+    var p = Promise.resolve();
+    ready.forEach(function(entry){
+      p = p.then(function(){ return dirHandle(root, stripExt(entry.name)); })
+           .then(function(archDir){
+              var inner = Promise.resolve();
+              entry.files.forEach(function(f){
+                inner = inner.then(function(){
+                  var parts = f.path.split('/').filter(Boolean);
+                  var fname = parts.pop();
+                  var dirP = Promise.resolve(archDir);
+                  parts.forEach(function(seg){ dirP = dirP.then(function(d){ return dirHandle(d, seg); }); });
+                  return dirP.then(function(dir){
+                    return entry.zip.file(f.path).async('blob').then(function(blob){
+                      return dir.getFileHandle(fname, { create:true }).then(function(fh){
+                        return fh.createWritable().then(function(w){
+                          return w.write(blob).then(function(){ return w.close(); }).then(function(){ count++; });
+                        });
+                      });
+                    });
+                  });
+                });
+              });
+              return inner;
+           });
+    });
+    return p.then(function(){ return count; });
+  }
+
+  // ---- state / toolbar ----
+  function refreshState(){
+    var n = archives.length;
+    toolbarEl.classList.toggle('show', n > 0);
+    dropEl.classList.toggle('compact', n > 0);
+
+    var done = archives.filter(function(a){ return a.status === 'done'; });
+    var totalFiles = done.reduce(function(s,a){ return s + a.files.length; }, 0);
+    var totalSize = done.reduce(function(s,a){ return s + a.totalSize; }, 0);
+    var working = archives.some(function(a){ return a.status === 'working'; });
+
+    var txt = '<b>'+n+'</b> archive'+(n>1?'s':'');
+    if (totalFiles) txt += ', <b>'+totalFiles+'</b> fichier'+(totalFiles>1?'s':'')+' ('+fmtSize(totalSize)+')';
+    if (working) txt += ' &middot; extraction...';
+    summaryEl.innerHTML = txt;
+
+    var noneReady = totalFiles === 0;
+    dlAllBtn.disabled = noneReady;
+    saveFolderBtn.disabled = noneReady;
+  }
+
+  function clearAll(){
+    archives = [];
+    listEl.innerHTML = '';
+    refreshState();
+    hideToast();
+  }
+
+  // ---- events ----
+  dropEl.addEventListener('click', function(){ fileEl.click(); });
+  dropEl.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fileEl.click(); }
+  });
+  fileEl.addEventListener('change', function(){ addFiles(fileEl.files); fileEl.value = ''; });
+
+  ['dragenter','dragover'].forEach(function(ev){
+    dropEl.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); dropEl.classList.add('hot'); });
+  });
+  ['dragleave','dragend','drop'].forEach(function(ev){
+    dropEl.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); dropEl.classList.remove('hot'); });
+  });
+  dropEl.addEventListener('drop', function(e){
+    var dt = e.dataTransfer;
+    if (dt && dt.files && dt.files.length) addFiles(dt.files);
+  });
+  // prevent the browser from opening files dropped outside the zone
+  ['dragover','drop'].forEach(function(ev){
+    window.addEventListener(ev, function(e){
+      if (!dropEl.contains(e.target)) e.preventDefault();
+    });
+  });
+
+  clearBtn.addEventListener('click', clearAll);
+  dlAllBtn.addEventListener('click', downloadAll);
+  saveFolderBtn.addEventListener('click', saveToFolder);
+
+})();
+</script>
+</body>
+</html>

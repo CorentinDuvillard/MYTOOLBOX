@@ -305,6 +305,22 @@
           </svg>
         ),
       },
+      {
+        id: "archive",
+        name: "Archive Studio",
+        tag: "Archive",
+        use: "Décompression .zip par lots",
+        type: "iframe",
+        path: "./Archive%20Studio.html",
+        desc: "Décompresse plusieurs archives .zip à la fois — exploration de l'arborescence, export fichier par fichier ou dossier complet.",
+        icon: (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 8v13H3V8" />
+            <path d="M1 3h22v5H1z" />
+            <path d="M10 12h4" />
+          </svg>
+        ),
+      },
     ];
 
     function Landing({ onOpen, loadingId, error }) {
@@ -326,13 +342,13 @@
           </header>
 
           <section className="hero">
-            <div className="hero-eyebrow">Trois outils · Un environnement</div>
+            <div className="hero-eyebrow">Quatre outils · Un environnement</div>
             <h1 className="hero-title">
               Créez, capturez et <em>annotez</em><br />
               directement depuis votre navigateur.
             </h1>
             <p className="hero-lead">
-              Toolbox rassemble trois studios légers — image, média et PDF —
+              Toolbox rassemble quatre studios légers — image, média, PDF et archives —
               dans une interface unifiée, sobre et sans installation.
             </p>
           </section>
@@ -368,9 +384,11 @@
       );
     }
 
-    // Hôte du studio actif : monte dynamiquement le composant récupéré sur window
+    // Hôte du studio actif : monte le composant React récupéré sur window,
+    // ou charge la page HTML autonome dans une iframe selon le type.
     function StudioStage({ studio, onClose }) {
-      const Comp = window[studio.global];
+      const isIframe = studio.type === "iframe";
+      const Comp = isIframe ? null : window[studio.global];
       useEffect(() => {
         const onKey = (e) => { if (e.key === "Escape") onClose(); };
         window.addEventListener("keydown", onKey);
@@ -386,7 +404,13 @@
             Studios
           </button>
           <div className="studio-mount">
-            {Comp ? React.createElement(Comp) : null}
+            {isIframe
+              ? <iframe
+                  src={studio.path}
+                  title={studio.name}
+                  style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+                />
+              : (Comp ? React.createElement(Comp) : null)}
           </div>
         </div>
       );
@@ -399,6 +423,12 @@
 
       const open = useCallback(async (studio) => {
         setError(null);
+        // Studios "iframe" (pages HTML autonomes) : pas de transpilation,
+        // on les monte directement dans un cadre isolé.
+        if (studio.type === "iframe") {
+          setActive(studio);
+          return;
+        }
         setLoadingId(studio.id);
         try {
           await loadStudio(studio.path, studio.global);

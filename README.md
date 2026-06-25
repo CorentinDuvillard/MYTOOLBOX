@@ -80,6 +80,24 @@ Structure technique :
 - il n’est pas exposé sur window ;
 - lui aussi nécessite un contrat d’intégration cohérent avant de pouvoir être injecté dans la vitrine HTML existante.
 
+4) Archive Studio
+Rôle :
+- décompression d’archives .zip par lots, 100% locale.
+
+Ce que fait l’outil :
+- accepte plusieurs archives .zip d’un coup (glisser-déposer ou sélection) ;
+- lit chaque archive avec JSZip, directement dans le navigateur ;
+- affiche l’arborescence des fichiers (dossiers et fichiers, avec tailles) ;
+- permet de télécharger un fichier précis, tous les fichiers d’une archive, ou tout d’un coup ;
+- permet, sur les navigateurs compatibles, d’écrire directement les fichiers dans un dossier choisi (File System Access API) ;
+- ne prend pas en charge .rar ni .7z.
+
+Structure technique :
+- contrairement aux autres studios, ce n’est pas un composant React mais une page HTML autonome (JS vanilla) ;
+- elle charge JSZip depuis un CDN et possède son propre thème sombre ;
+- elle est intégrée à la vitrine via un studio de type `iframe` (champ `type: "iframe"` dans le tableau STUDIOS d’index.html) ;
+- aucune transpilation Babel ni exposition sur window n’est nécessaire : la page est montée telle quelle dans un cadre isolé.
+
 
 ## Contraintes UI 
 La vitrine HTML doit être :
