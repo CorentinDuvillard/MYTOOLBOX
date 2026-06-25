@@ -198,14 +198,14 @@
 
     <main>
     <section class="hero">
-      <div class="hero-eyebrow">Quatre outils · Un environnement</div>
+      <div class="hero-eyebrow">Une boîte à outils · Un environnement</div>
       <h1 class="hero-title">
-        Créez, capturez et <em>annotez</em><br />
+        Créez, convertissez et <em>analysez</em><br />
         directement depuis votre navigateur.
       </h1>
       <p class="hero-lead">
-        Toolbox rassemble quatre studios légers — image, média, PDF et archives —
-        dans une interface unifiée, sobre et sans installation.
+        Toolbox rassemble des outils légers — image, média, PDF, archives,
+        conversion et dev — dans une interface unifiée, sobre et sans installation.
       </p>
     </section>
 
@@ -272,6 +272,36 @@
         type: "iframe", path: "./Image%20Converter.html",
         desc: "Convertit vos images d'un format à l'autre (PNG, JPG, WebP, AVIF), avec réglage de la qualité. 100 % local.",
         icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-5-5L5 21"/></svg>'
+      },
+      {
+        id: "json", name: "Formateur JSON", tag: "Dev", use: "Indenter · minifier · valider",
+        type: "iframe", path: "./JSON%20Formatter.html",
+        desc: "Indente, minifie et valide du JSON, avec détection d'erreur (ligne/colonne).",
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/></svg>'
+      },
+      {
+        id: "base64", name: "Base64 & URL", tag: "Encodage", use: "Encoder · décoder",
+        type: "iframe", path: "./Base64%20URL.html",
+        desc: "Encode et décode du texte en Base64 (compatible UTF-8) ou en URL.",
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>'
+      },
+      {
+        id: "hash", name: "Calcul de hash", tag: "Sécurité", use: "SHA-1 · 256 · 384 · 512",
+        type: "iframe", path: "./Hash.html",
+        desc: "Calcule les empreintes SHA d'un texte ou d'un fichier via l'API Web Crypto.",
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg>'
+      },
+      {
+        id: "uuidpw", name: "UUID & mot de passe", tag: "Générateur", use: "Aléatoire cryptographique",
+        type: "iframe", path: "./UUID%20Password.html",
+        desc: "Génère des UUID v4 et des mots de passe robustes (générateur Web Crypto).",
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+      },
+      {
+        id: "color", name: "Convertisseur de couleurs", tag: "Couleur", use: "HEX · RGB · HSL",
+        type: "iframe", path: "./Color%20Converter.html",
+        desc: "Convertit une couleur entre HEX, RGB et HSL, avec aperçu et copie.",
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7s6 5.6 6 10.3a6 6 0 0 1-12 0c0-4.7 6-10.3 6-10.3z"/></svg>'
       }
     ];
 
