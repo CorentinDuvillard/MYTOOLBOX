@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convertisseur d'images</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .thumb{width:40px;height:40px;flex:none;border-radius:8px;border:1px solid var(--line);object-fit:cover;background:var(--surface-2)}
+  .badge{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+  .card.done .badge{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+  .dlbtn{flex:none}
+  .qtyrow[hidden]{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="tool-head">
+    <div class="tool-mark">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-5-5L5 21"/></svg>
+      </span>
+      Convertisseur d'images
+    </div>
+    <span class="tag">PNG · JPG · WebP · AVIF</span>
+  </header>
+
+  <p class="sub">Convertissez vos images d'un format à l'autre. Choisissez le format de sortie et la qualité, puis téléchargez. Tout est traité dans votre navigateur — aucune image n'est envoyée sur un serveur.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des images">
+    <div class="bigicon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+    </div>
+    <h2>Glissez vos images ici</h2>
+    <p>ou cliquez pour les sélectionner</p>
+    <div class="ext">formats acceptés : png, jpg, webp, avif, gif, bmp</div>
+  </div>
+  <input type="file" id="file" accept="image/*" multiple hidden>
+
+  <div class="toolbar" id="toolbar" hidden>
+    <div class="field" style="min-width:150px">
+      <label for="fmt">Format de sortie</label>
+      <select id="fmt">
+        <option value="image/png">PNG</option>
+        <option value="image/jpeg">JPEG</option>
+        <option value="image/webp" selected>WebP</option>
+        <option value="image/avif">AVIF</option>
+      </select>
+    </div>
+    <div class="field qtyrow" id="qtyRow" style="min-width:180px">
+      <label for="quality">Qualité — <span id="qval" class="mono">90</span>%</label>
+      <input type="range" id="quality" min="10" max="100" value="90">
+    </div>
+    <div class="row" style="margin-left:auto;align-self:flex-end">
+      <button class="btn primary" id="convert">Convertir tout</button>
+      <button class="btn" id="dlAll" hidden>Tout télécharger</button>
+      <button class="btn ghost" id="clear">Effacer</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <div class="list" id="list"></div>
+
+  <footer class="foot">
+    <span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span>
+    <span class="pt" id="avifNote" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg> AVIF non supporté par ce navigateur</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var items = [], seq = 0;
+  var dropEl = document.getElementById('drop'),
+      fileEl = document.getElementById('file'),
+      listEl = document.getElementById('list'),
+      toolbarEl = document.getElementById('toolbar'),
+      fmtEl = document.getElementById('fmt'),
+      qtyRow = document.getElementById('qtyRow'),
+      qualityEl = document.getElementById('quality'),
+      qvalEl = document.getElementById('qval'),
+      convertBtn = document.getElementById('convert'),
+      dlAllBtn = document.getElementById('dlAll'),
+      clearBtn = document.getElementById('clear'),
+      toastEl = document.getElementById('toast');
+
+  var MAX_BYTES = 30 * 1024 * 1024; // avertissement au-delà
+  var EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/avif': 'avif' };
+
+  // Détection de support d'encodage (AVIF/WebP variables selon le navigateur)
+  function supports(mime) {
+    var c = document.createElement('canvas'); c.width = c.height = 2;
+    try { return c.toDataURL(mime).indexOf('data:' + mime) === 0; } catch (e) { return false; }
+  }
+  if (!supports('image/avif')) {
+    var opt = fmtEl.querySelector('option[value="image/avif"]');
+    if (opt) { opt.disabled = true; opt.textContent = 'AVIF (non supporté)'; }
+    document.getElementById('avifNote').hidden = false;
+  }
+
+  function fmtSize(b) {
+    if (b == null) return '';
+    if (b < 1024) return b + ' o';
+    var u = ['Ko', 'Mo', 'Go'], i = -1, n = b;
+    do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+    return (n < 10 ? n.toFixed(1) : Math.round(n)) + ' ' + u[i];
+  }
+  function baseName(name) { return name.replace(/\.[^.]+$/, ''); }
+  function showToast(html, warn) { toastEl.innerHTML = html; toastEl.className = 'toast show' + (warn ? ' warn' : ''); }
+  function hideToast() { toastEl.className = 'toast'; }
+
+  function syncQty() {
+    var lossy = fmtEl.value !== 'image/png';
+    qtyRow.hidden = !lossy;
+  }
+  fmtEl.addEventListener('change', function () { syncQty(); markStale(); });
+  qualityEl.addEventListener('input', function () { qvalEl.textContent = qualityEl.value; markStale(); });
+  syncQty();
+
+  // Quand le format/qualité change, les sorties précédentes ne sont plus à jour.
+  function markStale() {
+    items.forEach(function (it) { if (it.status === 'done') { it.status = 'ready'; updateCard(it); } });
+    dlAllBtn.hidden = true;
+  }
+
+  function addFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList);
+    if (!files.length) return;
+    hideToast();
+    var rejected = 0, big = 0;
+    files.forEach(function (f) {
+      if (!f.type.startsWith('image/')) { rejected++; return; }
+      if (f.size > MAX_BYTES) big++;
+      var it = { id: ++seq, file: f, name: f.name, size: f.size, url: URL.createObjectURL(f),
+                 status: 'ready', out: null, el: null };
+      items.push(it);
+      renderCard(it);
+    });
+    if (rejected) showToast('<span class="lead">Ignoré</span> ' + rejected + ' fichier' + (rejected > 1 ? 's' : '') + ' non reconnu' + (rejected > 1 ? 's' : '') + ' comme image.', true);
+    else if (big) showToast('<span class="lead">Attention</span> ' + big + ' image' + (big > 1 ? 's' : '') + ' volumineuse' + (big > 1 ? 's' : '') + ' (> 30 Mo) — la conversion peut être lente.', true);
+    refresh();
+  }
+
+  function renderCard(it) {
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="head">' +
+        '<img class="thumb" alt="" src="' + it.url + '">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="fname"></div>' +
+          '<div class="fstat"></div>' +
+        '</div>' +
+        '<span class="badge"></span>' +
+        '<button class="btn dlbtn" hidden>Télécharger</button>' +
+      '</div>';
+    card.querySelector('.fname').textContent = it.name;
+    it.el = card;
+    listEl.appendChild(card);
+    updateCard(it);
+    var dl = card.querySelector('.dlbtn');
+    dl.addEventListener('click', function () { if (it.out) downloadBlob(it.out.blob, it.out.name); });
+  }
+
+  function updateCard(it) {
+    var card = it.el; if (!card) return;
+    card.className = 'card' + (it.status === 'done' ? ' done' : it.status === 'fail' ? ' fail' : '');
+    var stat = card.querySelector('.fstat'), badge = card.querySelector('.badge'), dl = card.querySelector('.dlbtn');
+    if (it.status === 'done' && it.out) {
+      var delta = it.out.blob.size - it.size, pct = it.size ? Math.round(delta / it.size * 100) : 0;
+      stat.innerHTML = '<span class="mono">' + fmtSize(it.size) + '</span><span class="dot"></span>' +
+        '<span class="mono">' + fmtSize(it.out.blob.size) + '</span><span class="dot"></span>' +
+        '<span>' + (delta <= 0 ? '−' : '+') + Math.abs(pct) + '%</span>';
+      badge.textContent = EXT[fmtEl.value] || 'ok';
+      dl.hidden = false;
+    } else if (it.status === 'fail') {
+      stat.textContent = it.error || 'Échec de la conversion';
+      badge.textContent = 'échec';
+      dl.hidden = true;
+    } else {
+      stat.innerHTML = '<span class="mono">' + fmtSize(it.size) + '</span>';
+      badge.textContent = it.status === 'working' ? '…' : 'à convertir';
+      dl.hidden = true;
+    }
+  }
+
+  function convertOne(it, mime, quality) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        var c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        var ctx = c.getContext('2d');
+        if (mime === 'image/jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height); } // JPEG sans alpha
+        ctx.drawImage(img, 0, 0);
+        c.toBlob(function (blob) {
+          if (!blob) { resolve({ error: 'Format de sortie non supporté' }); return; }
+          resolve({ blob: blob, name: baseName(it.name) + '.' + (EXT[mime] || 'img') });
+        }, mime, quality);
+      };
+      img.onerror = function () { resolve({ error: 'Image illisible ou corrompue' }); };
+      img.src = it.url;
+    });
+  }
+
+  function convertAll() {
+    var mime = fmtEl.value, quality = (+qualityEl.value) / 100;
+    var pending = items.filter(function (it) { return it.status !== 'done'; });
+    if (!pending.length) return;
+    convertBtn.disabled = true;
+    var i = 0;
+    (function next() {
+      if (i >= pending.length) {
+        convertBtn.disabled = false;
+        dlAllBtn.hidden = !items.some(function (it) { return it.status === 'done'; });
+        return;
+      }
+      var it = pending[i++];
+      it.status = 'working'; updateCard(it);
+      convertOne(it, mime, quality).then(function (res) {
+        if (res.error) { it.status = 'fail'; it.error = res.error; }
+        else { it.status = 'done'; it.out = res; }
+        updateCard(it);
+        next();
+      });
+    })();
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+  }
+
+  function downloadAll() {
+    var done = items.filter(function (it) { return it.status === 'done' && it.out; });
+    var i = 0;
+    (function next() {
+      if (i >= done.length) return;
+      var it = done[i++];
+      downloadBlob(it.out.blob, it.out.name);
+      setTimeout(next, 180);
+    })();
+  }
+
+  function clearAll() {
+    items.forEach(function (it) { URL.revokeObjectURL(it.url); });
+    items = []; listEl.innerHTML = ''; hideToast(); refresh();
+  }
+
+  function refresh() {
+    var n = items.length;
+    toolbarEl.hidden = n === 0;
+    dropEl.querySelector('h2').textContent = n ? 'Ajouter d\'autres images' : 'Glissez vos images ici';
+    if (!n) dlAllBtn.hidden = true;
+  }
+
+  // Événements
+  dropEl.addEventListener('click', function () { fileEl.click(); });
+  dropEl.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileEl.click(); } });
+  fileEl.addEventListener('change', function () { addFiles(fileEl.files); fileEl.value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { dropEl.addEventListener(ev, function (e) { e.preventDefault(); dropEl.classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { dropEl.addEventListener(ev, function (e) { e.preventDefault(); dropEl.classList.remove('hot'); }); });
+  dropEl.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+  window.addEventListener('dragover', function (e) { if (!dropEl.contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if (!dropEl.contains(e.target)) e.preventDefault(); });
+  convertBtn.addEventListener('click', convertAll);
+  dlAllBtn.addEventListener('click', downloadAll);
+  clearBtn.addEventListener('click', clearAll);
+})();
+</script>
+</body>
+</html>
