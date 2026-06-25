@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organiser un PDF</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-top:18px}
+  .pg{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);overflow:hidden;display:flex;flex-direction:column}
+  .pg.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .pg .thumb{background:var(--surface-2);display:flex;align-items:center;justify-content:center;padding:8px;min-height:120px}
+  .pg .thumb img{max-width:100%;max-height:160px;box-shadow:var(--shadow-soft);transition:transform .2s}
+  .pg .bar{display:flex;align-items:center;gap:2px;padding:6px 8px;border-top:1px solid var(--line)}
+  .pg .num{font-size:12px;color:var(--muted);font-family:var(--font-mono);margin-right:auto}
+  .pg .ib{width:26px;height:26px;display:grid;place-items:center;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:6px}
+  .pg .ib:hover{background:var(--surface-2);color:var(--text)} .pg .ib.del:hover{color:var(--accent)}
+  .pg .ib svg{width:15px;height:15px}
+  .selrow{display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
+  .selrow input{accent-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>Organiser un PDF</div>
+    <span class="tag">Pages</span>
+  </header>
+  <p class="sub">Réorganisez, pivotez, supprimez ou extrayez les pages d'un PDF. Les miniatures sont rendues localement (pdf.js) et l'export est reconstruit par pdf-lib. Rien n'est transmis.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir un PDF">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+    <h2>Glissez un PDF ici</h2><p>ou cliquez pour le sélectionner</p>
+  </div>
+  <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+
+  <div id="panel" hidden>
+    <div class="toolbar"><span class="summary" id="info"></span>
+      <div class="row" style="margin-left:auto"><button class="btn" id="extract">Extraire la sélection</button><button class="btn primary" id="export">Exporter le PDF</button><button class="btn ghost" id="reset">Autre PDF</button></div>
+    </div>
+    <div class="pages" id="pages"></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SRC = { pdfjs: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", worker: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js", pdflib: "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" };
+  var loaded = {}, bytes = null, pages = [], fileName = 'document';
+  function load(src, glob) { if (window[glob]) return Promise.resolve(window[glob]); if (loaded[src]) return loaded[src]; loaded[src] = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = function () { res(window[glob]); }; s.onerror = function () { loaded[src] = null; rej(new Error('Échec du chargement d\'une bibliothèque.')); }; document.head.appendChild(s); }); return loaded[src]; }
+  function toast(m, warn) { $('toast').className = 'toast show' + (warn ? ' warn' : ''); $('toast').innerHTML = m; }
+  function hideToast() { $('toast').className = 'toast'; }
+
+  var ICONS = { rotL: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v6h6"/><path d="M3 8a9 9 0 1 0 3-5"/></svg>', rotR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M21 8a9 9 0 1 1-3-5"/></svg>', left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>', right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>', del: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>' };
+
+  function open(file) {
+    if (!file || file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { toast('<span class="lead">Erreur</span> ce fichier n\'est pas un PDF.', true); return; }
+    fileName = file.name.replace(/\.pdf$/i, ''); toast('<span class="lead">Lecture</span> rendu des pages…');
+    file.arrayBuffer().then(function (ab) {
+      bytes = new Uint8Array(ab);
+      return load(SRC.pdfjs, 'pdfjsLib').then(function (pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = SRC.worker;
+        return pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+      });
+    }).then(function (doc) {
+      pages = []; $('pages').innerHTML = ''; $('panel').hidden = false; $('drop').hidden = true;
+      var chain = Promise.resolve();
+      for (var i = 1; i <= doc.numPages; i++) (function (n) { chain = chain.then(function () { return renderThumb(doc, n); }); })(i);
+      chain.then(function () { hideToast(); refresh(); });
+    }).catch(function (e) { toast('<span class="lead">Erreur</span> PDF illisible ou protégé.', true); });
+  }
+
+  function renderThumb(doc, n) {
+    return doc.getPage(n).then(function (page) {
+      var vp = page.getViewport({ scale: 0.4 }), cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+      return page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise.then(function () {
+        pages.push({ src: n - 1, rot: 0, sel: false, thumb: cv.toDataURL('image/png') });
+      });
+    });
+  }
+
+  function refresh() {
+    $('info').innerHTML = '<b>' + pages.length + '</b> page' + (pages.length > 1 ? 's' : '');
+    $('pages').innerHTML = '';
+    pages.forEach(function (p, i) {
+      var el = document.createElement('div'); el.className = 'pg' + (p.sel ? ' sel' : '');
+      el.innerHTML = '<div class="thumb"><img alt="page" src="' + p.thumb + '" style="transform:rotate(' + p.rot + 'deg)"></div>' +
+        '<div class="bar"><span class="num">' + (i + 1) + '</span>' +
+        '<button class="ib" title="Reculer">' + ICONS.left + '</button><button class="ib" title="Avancer">' + ICONS.right + '</button>' +
+        '<button class="ib" title="Pivoter">' + ICONS.rotR + '</button><button class="ib del" title="Supprimer">' + ICONS.del + '</button></div>' +
+        '<label class="selrow"><input type="checkbox"' + (p.sel ? ' checked' : '') + '> Sélectionner</label>';
+      var b = el.querySelectorAll('.ib');
+      b[0].onclick = function () { if (i > 0) { pages.splice(i - 1, 0, pages.splice(i, 1)[0]); refresh(); } };
+      b[1].onclick = function () { if (i < pages.length - 1) { pages.splice(i + 1, 0, pages.splice(i, 1)[0]); refresh(); } };
+      b[2].onclick = function () { p.rot = (p.rot + 90) % 360; refresh(); };
+      b[3].onclick = function () { pages.splice(i, 1); refresh(); };
+      el.querySelector('input').onchange = function (e) { p.sel = e.target.checked; el.classList.toggle('sel', p.sel); };
+      $('pages').appendChild(el);
+    });
+  }
+
+  function build(list) {
+    return load(SRC.pdflib, 'PDFLib').then(function (PDFLib) {
+      return PDFLib.PDFDocument.load(bytes).then(function (src) {
+        return PDFLib.PDFDocument.create().then(function (outDoc) {
+          return outDoc.copyPages(src, list.map(function (p) { return p.src; })).then(function (copied) {
+            copied.forEach(function (pg, i) { var add = list[i].rot; if (add) pg.setRotation(PDFLib.degrees((pg.getRotation().angle + add) % 360)); outDoc.addPage(pg); });
+            return outDoc.save();
+          });
+        });
+      });
+    });
+  }
+  function dl(u8, name) { var blob = new Blob([u8], { type: 'application/pdf' }), u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1500); }
+
+  $('export').addEventListener('click', function () { if (!pages.length) { toast('<span class="lead">Vide</span> aucune page à exporter.', true); return; } toast('<span class="lead">Export</span> reconstruction…'); build(pages).then(function (b) { hideToast(); dl(b, fileName + '-organise.pdf'); }).catch(function (e) { toast('<span class="lead">Erreur</span> ' + e.message, true); }); });
+  $('extract').addEventListener('click', function () { var sel = pages.filter(function (p) { return p.sel; }); if (!sel.length) { toast('<span class="lead">Sélection vide</span> cochez au moins une page.', true); return; } toast('<span class="lead">Export</span> extraction…'); build(sel).then(function (b) { hideToast(); dl(b, fileName + '-extrait.pdf'); }).catch(function (e) { toast('<span class="lead">Erreur</span> ' + e.message, true); }); });
+  $('reset').addEventListener('click', function () { bytes = null; pages = []; $('panel').hidden = true; $('drop').hidden = false; hideToast(); });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { if ($('file').files[0]) open($('file').files[0]); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) open(e.dataTransfer.files[0]); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+})();
+</script>
+</body>
+</html>
