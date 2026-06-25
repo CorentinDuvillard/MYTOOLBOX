@@ -50,9 +50,12 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var CORE = "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js";
-  var FF = "https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js";
-  var ffmpeg = null, ffP = null, files = [], op = 'convert';
+  // ffmpeg.wasm 0.12 — cœur MONO-THREAD (pas de SharedArrayBuffer, donc AUCUN
+  // en-tête COOP/COEP requis : zéro impact sur les autres outils).
+  var FF_URL = "https://esm.sh/@ffmpeg/ffmpeg@0.12.10";
+  var UTIL_URL = "https://esm.sh/@ffmpeg/util@0.12.1";
+  var CORE_BASE = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+  var ffmpeg = null, ffP = null, fetchFile = null, files = [], op = 'convert';
 
   var OPS = {
     convert: { label: 'Convertir', multi: false, accept: 'video/*,audio/*', dropLabel: 'Glissez une vidéo ou un audio',
@@ -74,16 +77,16 @@
   function ext(name) { var m = /\.([^.]+)$/.exec(name); return m ? m[1].toLowerCase() : 'bin'; }
 
   function ensureFFmpeg() {
-    if (ffmpeg && ffmpeg.isLoaded()) return Promise.resolve(ffmpeg);
+    if (ffmpeg && ffmpeg.loaded) return Promise.resolve(ffmpeg);
     if (ffP) return ffP;
-    ffP = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = FF; s.onload = res; s.onerror = function () { rej(new Error('Échec du chargement de ffmpeg.wasm.')); }; document.head.appendChild(s); })
-      .then(function () {
-        ffmpeg = FFmpeg.createFFmpeg({ corePath: CORE, log: false });
-        ffmpeg.setProgress(function (p) { if (p && p.ratio >= 0) $('bar').style.width = Math.min(100, Math.round(p.ratio * 100)) + '%'; });
-        toast('<span class="lead">Préparation</span> chargement du moteur (~25 Mo, une seule fois)…');
-        return ffmpeg.load();
-      }).then(function () { hideToast(); return ffmpeg; })
-      .catch(function (e) { ffP = null; throw e; });
+    toast('<span class="lead">Préparation</span> chargement du moteur (~30 Mo, une seule fois)…');
+    ffP = Promise.all([import(FF_URL), import(UTIL_URL)]).then(function (mods) {
+      var FFmpeg = mods[0].FFmpeg, toBlobURL = mods[1].toBlobURL; fetchFile = mods[1].fetchFile;
+      ffmpeg = new FFmpeg();
+      ffmpeg.on('progress', function (p) { if (p && p.progress >= 0) $('bar').style.width = Math.min(100, Math.round(p.progress * 100)) + '%'; });
+      return Promise.all([toBlobURL(CORE_BASE + '/ffmpeg-core.js', 'text/javascript'), toBlobURL(CORE_BASE + '/ffmpeg-core.wasm', 'application/wasm')])
+        .then(function (u) { return ffmpeg.load({ coreURL: u[0], wasmURL: u[1] }); });
+    }).then(function () { hideToast(); return ffmpeg; }).catch(function (e) { ffP = null; throw new Error('Échec du chargement de ffmpeg.wasm.'); });
     return ffP;
   }
 
@@ -123,29 +126,31 @@
   function run() {
     if (!files.length) { toast('<span class="lead">Aucun fichier</span> ajoutez un média.', true); return; }
     $('run').disabled = true; $('progWrap').hidden = false; $('bar').style.width = '0%'; $('result').hidden = true;
-    ensureFFmpeg().then(function (ff) {
-      return FFmpeg.fetchFile(files[0]).then(function () { return run2(ff); });
-    }).catch(function (e) { toast('<span class="lead">Erreur</span> ' + e.message, true); }).finally(function () { $('run').disabled = false; });
+    ensureFFmpeg().then(function (ff) { return run2(ff); })
+      .catch(function (e) { toast('<span class="lead">Erreur</span> ' + e.message, true); })
+      .finally(function () { $('run').disabled = false; });
   }
 
   function run2(ff) {
     toast('<span class="lead">Traitement</span> en cours…');
     var chain = Promise.resolve(), inputs = [];
-    files.forEach(function (f, i) { var nm = 'in' + i + '.' + ext(f.name); inputs.push(nm); chain = chain.then(function () { return FFmpeg.fetchFile(f); }).then(function (d) { ff.FS('writeFile', nm, d); }); });
+    files.forEach(function (f, i) { var nm = 'in' + i + '.' + ext(f.name); inputs.push(nm); chain = chain.then(function () { return fetchFile(f); }).then(function (d) { return ff.writeFile(nm, d); }); });
     return chain.then(function () {
       if (op === 'merge') {
         var list = inputs.map(function (n) { return "file '" + n + "'"; }).join('\n');
-        ff.FS('writeFile', 'list.txt', new TextEncoder().encode(list));
-        var out = 'out.' + ext(files[0].name);
-        return ff.run('-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', out).then(function () { return out; });
+        return ff.writeFile('list.txt', new TextEncoder().encode(list)).then(function () {
+          var out = 'out.' + ext(files[0].name);
+          return ff.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', out]).then(function () { return out; });
+        });
       }
       var a = argsFor(inputs[0]);
-      return ff.run.apply(ff, a.args).then(function () { return a.out; });
+      return ff.exec(a.args).then(function () { return a.out; });
     }).then(function (out) {
-      var data = ff.FS('readFile', out), blob = new Blob([data.buffer], { type: mime(out) });
-      showResult(blob, out); hideToast(); $('bar').style.width = '100%';
-      // cleanup
-      try { inputs.forEach(function (n) { ff.FS('unlink', n); }); ff.FS('unlink', out); } catch (e) {}
+      return ff.readFile(out).then(function (data) {
+        var blob = new Blob([data.buffer || data], { type: mime(out) });
+        showResult(blob, out); hideToast(); $('bar').style.width = '100%';
+        inputs.concat([out]).forEach(function (n) { try { ff.deleteFile(n); } catch (e) {} });
+      });
     });
   }
 
