@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Générateur de favicon</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .grid-fav{display:flex;flex-wrap:wrap;gap:16px;margin-top:18px}
+  .fav{display:flex;flex-direction:column;align-items:center;gap:6px;border:1px solid var(--line);border-radius:var(--radius);padding:14px;background:var(--surface);cursor:pointer;transition:border-color .15s}
+  .fav:hover{border-color:var(--accent-line)}
+  .fav img{image-rendering:pixelated;border:1px solid var(--line);border-radius:4px;background:var(--surface-2)}
+  .fav .sz{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+  .snippet{margin-top:18px}
+  .snippet textarea{min-height:96px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg></span>Générateur de favicon</div>
+    <span class="tag">PNG + ICO</span>
+  </header>
+  <p class="sub">Déposez une image (carrée de préférence) pour générer toutes les tailles de favicon, un fichier .ico et le code HTML à coller. Tout est généré localement.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir une image">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+    <h2>Glissez une image ici</h2><p>ou cliquez pour la sélectionner</p>
+    <div class="ext">idéalement carrée, ≥ 512×512</div>
+  </div>
+  <input type="file" id="file" accept="image/*" hidden>
+
+  <div id="panel" hidden>
+    <div class="row" style="margin-top:4px"><span class="summary" id="info"></span>
+      <button class="btn primary" id="dlIco">Télécharger .ico</button>
+      <button class="btn" id="dlAll">Tous les PNG</button>
+      <button class="btn ghost" id="reset">Autre image</button>
+    </div>
+    <div class="grid-fav" id="grid"></div>
+    <div class="snippet field"><label for="code">À coller dans le &lt;head&gt;</label><textarea id="code" readonly spellcheck="false"></textarea></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SIZES = [16, 32, 48, 64, 128, 180, 192, 256, 512];
+  var img = null, outputs = {}; // size -> {blob, url, bytes}
+
+  function scaleToBlob(size) {
+    return new Promise(function (resolve) {
+      var cv = document.createElement('canvas'); cv.width = cv.height = size;
+      var ctx = cv.getContext('2d'); ctx.imageSmoothingQuality = 'high';
+      // contain (carré), centrage
+      var s = Math.min(size / img.naturalWidth, size / img.naturalHeight), w = img.naturalWidth * s, h = img.naturalHeight * s;
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      cv.toBlob(function (blob) { blob.arrayBuffer().then(function (ab) { resolve({ size: size, blob: blob, bytes: new Uint8Array(ab), url: URL.createObjectURL(blob) }); }); }, 'image/png');
+    });
+  }
+
+  function buildIco(entries) {
+    var count = entries.length, header = 6 + count * 16, total = entries.reduce(function (s, e) { return s + e.bytes.length; }, 0);
+    var buf = new ArrayBuffer(header + total), dv = new DataView(buf), off = header;
+    dv.setUint16(0, 0, true); dv.setUint16(2, 1, true); dv.setUint16(4, count, true);
+    entries.forEach(function (e, i) {
+      var p = 6 + i * 16;
+      dv.setUint8(p, e.size >= 256 ? 0 : e.size); dv.setUint8(p + 1, e.size >= 256 ? 0 : e.size);
+      dv.setUint8(p + 2, 0); dv.setUint8(p + 3, 0); dv.setUint16(p + 4, 1, true); dv.setUint16(p + 6, 32, true);
+      dv.setUint32(p + 8, e.bytes.length, true); dv.setUint32(p + 12, off, true);
+      new Uint8Array(buf, off, e.bytes.length).set(e.bytes); off += e.bytes.length;
+    });
+    return new Blob([buf], { type: 'image/x-icon' });
+  }
+
+  function dl(blob, name) { var u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1500); }
+
+  function load(file) {
+    if (!file || !file.type.startsWith('image/')) { $('toast').className = 'toast show warn'; $('toast').textContent = "Ce fichier n'est pas une image."; return; }
+    var im = new Image(); im.onload = function () {
+      img = im; $('drop').hidden = true; $('panel').hidden = false; $('toast').className = 'toast';
+      $('info').innerHTML = 'Source : <b>' + im.naturalWidth + '×' + im.naturalHeight + '</b> px';
+      $('grid').innerHTML = '';
+      Object.keys(outputs).forEach(function (k) { URL.revokeObjectURL(outputs[k].url); }); outputs = {};
+      Promise.all(SIZES.map(scaleToBlob)).then(function (res) {
+        res.forEach(function (r) {
+          outputs[r.size] = r;
+          var cell = document.createElement('div'); cell.className = 'fav';
+          var shown = Math.min(r.size, 96);
+          cell.innerHTML = '<img width="' + shown + '" height="' + shown + '" src="' + r.url + '" alt="favicon ' + r.size + '"><span class="sz">' + r.size + '×' + r.size + '</span>';
+          cell.title = 'Télécharger favicon-' + r.size + '.png';
+          cell.addEventListener('click', function () { dl(r.blob, 'favicon-' + r.size + '.png'); });
+          $('grid').appendChild(cell);
+        });
+      });
+      $('code').value =
+        '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">\n' +
+        '<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">\n' +
+        '<link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png">\n' +
+        '<link rel="icon" href="/favicon.ico" sizes="any">';
+    };
+    im.onerror = function () { $('toast').className = 'toast show warn'; $('toast').textContent = 'Image illisible.'; };
+    im.src = URL.createObjectURL(file);
+  }
+
+  $('dlIco').addEventListener('click', function () {
+    var entries = [16, 32, 48].map(function (s) { return outputs[s]; }).filter(Boolean);
+    if (entries.length) dl(buildIco(entries), 'favicon.ico');
+  });
+  $('dlAll').addEventListener('click', function () { var ks = Object.keys(outputs), i = 0; (function n() { if (i >= ks.length) return; var r = outputs[ks[i++]]; dl(r.blob, 'favicon-' + r.size + '.png'); setTimeout(n, 160); })(); });
+  $('reset').addEventListener('click', function () { img = null; $('panel').hidden = true; $('drop').hidden = false; });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { if ($('file').files[0]) load($('file').files[0]); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+})();
+</script>
+</body>
+</html>
