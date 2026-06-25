@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prévisualisation Markdown</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .io{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch}
+  @media (max-width:760px){.io{grid-template-columns:1fr}}
+  .io textarea{min-height:420px}
+  .md{border:1px solid var(--line);border-radius:var(--radius-sm);padding:18px 20px;background:var(--surface);min-height:420px;overflow:auto}
+  .md h1,.md h2,.md h3{letter-spacing:-.01em;margin:18px 0 10px;line-height:1.25}
+  .md h1{font-size:26px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .md h2{font-size:21px;border-bottom:1px solid var(--line);padding-bottom:4px} .md h3{font-size:17px}
+  .md p,.md li{font-size:14.5px;line-height:1.65} .md ul,.md ol{padding-left:22px;margin:8px 0}
+  .md a{color:var(--accent);text-decoration:underline}
+  .md code{font-family:var(--font-mono);font-size:12.5px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+  .md pre{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto}
+  .md pre code{background:none;padding:0}
+  .md blockquote{border-left:3px solid var(--accent);margin:10px 0;padding:2px 14px;color:var(--muted)}
+  .md table{border-collapse:collapse;margin:10px 0} .md th,.md td{border:1px solid var(--line);padding:6px 10px;font-size:14px}
+  .md img{max-width:100%} .md hr{border:none;border-top:1px solid var(--line);margin:16px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 15V9l3 3 3-3v6M17 9v6M14.5 12.5 17 15l2.5-2.5"/></svg></span>Prévisualisation Markdown</div>
+    <span class="tag">Markdown</span>
+  </header>
+  <p class="sub">Écrivez du Markdown à gauche, l'aperçu se met à jour à droite. Le rendu (marked) est chargé à la demande ; le HTML généré est nettoyé (scripts retirés) et reste local.</p>
+
+  <div class="row" style="margin-bottom:12px"><span class="summary" id="status">Chargement de l'aperçu…</span><button class="btn" id="copyHtml">Copier le HTML</button></div>
+  <div class="io">
+    <div class="field"><label for="in">Markdown</label><textarea id="in" spellcheck="false"># Titre
+
+Texte avec **gras**, *italique* et [lien](https://exemple.fr).
+
+- élément un
+- élément deux
+
+```js
+console.log("bonjour");
+```
+
+> Citation
+
+| A | B |
+|---|---|
+| 1 | 2 |
+</textarea></div>
+    <div class="field"><label for="prev">Aperçu</label><div class="md" id="prev" aria-live="polite"></div></div>
+  </div>
+
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SRC = "https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js", libP = null;
+  function ensure() { if (window.marked) return Promise.resolve(window.marked); if (libP) return libP; libP = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = SRC; s.onload = function () { res(window.marked); }; s.onerror = function () { libP = null; rej(new Error('Échec du chargement de marked.')); }; document.head.appendChild(s); }); return libP; }
+
+  // Nettoyage minimal : retire <script>, <style> et attributs on*/javascript:
+  function sanitize(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script,style,iframe,object,embed').forEach(function (n) { n.remove(); });
+    doc.querySelectorAll('*').forEach(function (el) {
+      Array.prototype.slice.call(el.attributes).forEach(function (a) {
+        if (/^on/i.test(a.name) || (/^(href|src)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
+      });
+    });
+    return doc.body.innerHTML;
+  }
+
+  var deb;
+  function render() {
+    ensure().then(function (marked) {
+      $('status').textContent = 'Aperçu à jour';
+      $('prev').innerHTML = sanitize(marked.parse($('in').value || ''));
+    }).catch(function (e) { $('status').textContent = e.message; });
+  }
+  $('in').addEventListener('input', function () { clearTimeout(deb); deb = setTimeout(render, 150); });
+  $('copyHtml').addEventListener('click', function () { navigator.clipboard.writeText($('prev').innerHTML).then(function () { var b = $('copyHtml'), o = b.textContent; b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = o; }, 1100); }); });
+  render();
+})();
+</script>
+</body>
+</html>
