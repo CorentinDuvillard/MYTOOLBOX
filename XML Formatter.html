@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Formateur XML</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .io{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:760px){.io{grid-template-columns:1fr}}
+  .io textarea{min-height:340px}
+  .status{font-size:13px;margin-top:6px;min-height:20px;color:var(--muted)}
+  .status.error{color:var(--accent-hover);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m10 8-4 4 4 4M14 8l4 4-4 4"/></svg></span>Formateur XML</div>
+    <span class="tag">XML</span>
+  </header>
+  <p class="sub">Indentez, minifiez et validez du XML (bien-formé). L'analyse utilise le parseur natif du navigateur — rien n'est transmis.</p>
+
+  <div class="toolbar">
+    <div class="field" style="min-width:130px"><label for="indent">Indentation</label><select id="indent"><option value="2">2 espaces</option><option value="4">4 espaces</option><option value="tab">Tabulation</option></select></div>
+    <div class="row" style="margin-left:auto;align-self:flex-end"><button class="btn primary" id="format">Formater</button><button class="btn" id="minify">Minifier</button><button class="btn" id="copy">Copier</button><button class="btn ghost" id="clear">Effacer</button></div>
+  </div>
+  <div class="io">
+    <div class="field"><label for="in">Entrée</label><textarea id="in" spellcheck="false" placeholder="<racine><item id='1'>valeur</item></racine>"></textarea></div>
+    <div class="field"><label for="out">Résultat</label><textarea id="out" spellcheck="false" readonly placeholder="Le XML formaté apparaît ici…"></textarea></div>
+  </div>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  function setStatus(m, e) { $('status').textContent = m; $('status').className = 'status' + (e ? ' error' : ''); }
+  function indentStr() { var v = $('indent').value; return v === 'tab' ? '\t' : ' '.repeat(+v); }
+
+  function parse(src) {
+    var doc = new DOMParser().parseFromString(src, 'application/xml');
+    var err = doc.getElementsByTagName('parsererror')[0];
+    if (err) { setStatus('XML invalide : ' + (err.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 160), true); return null; }
+    setStatus('XML bien-formé.'); return doc;
+  }
+
+  function fmtNode(node, depth, unit, out) {
+    var pad = unit.repeat(depth);
+    for (var i = 0; i < node.childNodes.length; i++) {
+      var c = node.childNodes[i];
+      if (c.nodeType === 1) { // element
+        var open = '<' + c.nodeName + attrs(c);
+        var kids = Array.prototype.filter.call(c.childNodes, function (k) { return !(k.nodeType === 3 && !k.nodeValue.trim()); });
+        if (kids.length === 0) { out.push(pad + open + '/>'); }
+        else if (kids.length === 1 && kids[0].nodeType === 3) { out.push(pad + open + '>' + esc(kids[0].nodeValue.trim()) + '</' + c.nodeName + '>'); }
+        else { out.push(pad + open + '>'); fmtNode(c, depth + 1, unit, out); out.push(pad + '</' + c.nodeName + '>'); }
+      } else if (c.nodeType === 3) { if (c.nodeValue.trim()) out.push(pad + esc(c.nodeValue.trim())); }
+      else if (c.nodeType === 8) { out.push(pad + '<!--' + c.nodeValue + '-->'); }
+      else if (c.nodeType === 4) { out.push(pad + '<![CDATA[' + c.nodeValue + ']]>'); }
+    }
+  }
+  function attrs(el) { var s = ''; for (var i = 0; i < el.attributes.length; i++) { var a = el.attributes[i]; s += ' ' + a.name + '="' + esc(a.value) + '"'; } return s; }
+  function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  function format() {
+    var src = $('in').value.trim(); if (!src) { $('out').value = ''; setStatus(''); return; }
+    var doc = parse(src); if (!doc) return;
+    var out = []; fmtNode(doc, 0, indentStr(), out);
+    var decl = /^\s*<\?xml[^?]*\?>/.exec(src);
+    $('out').value = (decl ? decl[0].trim() + '\n' : '') + out.join('\n');
+  }
+  function minify() {
+    var src = $('in').value.trim(); if (!src) { $('out').value = ''; setStatus(''); return; }
+    var doc = parse(src); if (!doc) return;
+    $('out').value = new XMLSerializer().serializeToString(doc).replace(/>\s+</g, '><').trim();
+  }
+
+  $('format').addEventListener('click', format);
+  $('minify').addEventListener('click', minify);
+  $('indent').addEventListener('change', function () { if ($('out').value) format(); });
+  $('clear').addEventListener('click', function () { $('in').value = ''; $('out').value = ''; setStatus(''); $('in').focus(); });
+  $('copy').addEventListener('click', function () { var t = $('out').value || $('in').value; if (!t) return; navigator.clipboard.writeText(t).then(function () { var b = $('copy'), o = b.textContent; b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = o; }, 1200); }); });
+  $('in').addEventListener('input', function () { if ($('in').value.trim()) parse($('in').value.trim()); else setStatus(''); });
+})();
+</script>
+</body>
+</html>
