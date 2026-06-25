@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visualiseur 3D (GLB / GLTF)</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .stage{position:relative;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface-2);height:62vh;min-height:360px}
+  .stage canvas{display:block;width:100%;height:100%}
+  .hud{position:absolute;left:12px;bottom:12px;font-family:var(--font-mono);font-size:11px;color:var(--muted);background:rgba(255,255,255,.8);border:1px solid var(--line);border-radius:8px;padding:5px 9px;backdrop-filter:blur(6px)}
+  .hint{position:absolute;right:12px;bottom:12px;font-size:11px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.27 6.96 8.73 5.04 8.73-5.04M12 22.08V12"/></svg></span>Visualiseur 3D</div>
+    <span class="tag">GLB · GLTF</span>
+  </header>
+  <p class="sub">Affichez un modèle 3D (.glb ou .gltf) : rotation, zoom et déplacement à la souris. Rendu local via three.js — aucun fichier n'est envoyé.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir un modèle 3D">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.27 6.96 8.73 5.04 8.73-5.04"/></svg></div>
+    <h2>Glissez un modèle .glb / .gltf</h2><p>ou cliquez pour le sélectionner</p>
+  </div>
+  <input type="file" id="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" hidden>
+
+  <div id="panel" hidden>
+    <div class="row" style="margin:0 0 12px"><span class="summary" id="info"></span><button class="btn ghost" id="reset">Autre modèle</button></div>
+    <div class="stage" id="stage">
+      <div class="hud" id="hud"></div>
+      <div class="hint">clic gauche : tourner · molette : zoom · clic droit : déplacer</div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SRC = ["https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js", "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js", "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"];
+  var libP = null;
+  function load1(src) { return new Promise(function (res, rej) { if (document.querySelector('script[data-s="' + src + '"]')) return res(); var s = document.createElement('script'); s.src = src; s.dataset.s = src; s.onload = res; s.onerror = function () { rej(new Error('Échec du chargement de three.js.')); }; document.head.appendChild(s); }); }
+  function ensure() { if (libP) return libP; libP = SRC.reduce(function (p, src) { return p.then(function () { return load1(src); }); }, Promise.resolve()).catch(function (e) { libP = null; throw e; }); return libP; }
+  function toast(m, w) { $('toast').className = 'toast show' + (w ? ' warn' : ''); $('toast').innerHTML = m; }
+  function hideToast() { $('toast').className = 'toast'; }
+
+  var renderer, scene, camera, controls, raf, curRoot;
+  function initThree() {
+    var THREE = window.THREE, stage = $('stage');
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(stage.clientWidth, stage.clientHeight);
+    stage.insertBefore(renderer.domElement, stage.firstChild);
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(50, stage.clientWidth / stage.clientHeight, 0.01, 5000);
+    camera.position.set(2, 1.5, 3);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    var d = new THREE.DirectionalLight(0xffffff, 0.9); d.position.set(5, 10, 7); scene.add(d);
+    var d2 = new THREE.DirectionalLight(0xffffff, 0.4); d2.position.set(-5, -3, -5); scene.add(d2);
+    controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+    window.addEventListener('resize', onResize);
+    (function loop() { raf = requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+  }
+  function onResize() { if (!renderer) return; var s = $('stage'); camera.aspect = s.clientWidth / s.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(s.clientWidth, s.clientHeight); }
+
+  function frame(obj) {
+    var THREE = window.THREE, box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+    var maxDim = Math.max(size.x, size.y, size.z) || 1, dist = maxDim / (2 * Math.tan(Math.PI * camera.fov / 360)) * 1.6;
+    controls.target.copy(center); camera.position.copy(center).add(new THREE.Vector3(0.8, 0.6, 1).normalize().multiplyScalar(dist));
+    camera.near = maxDim / 100; camera.far = maxDim * 100; camera.updateProjectionMatrix(); controls.update();
+  }
+
+  function open(file) {
+    if (!/\.(glb|gltf)$/i.test(file.name)) { toast('<span class="lead">Erreur</span> formats acceptés : .glb, .gltf.', true); return; }
+    toast('<span class="lead">Chargement</span> du modèle…');
+    ensure().then(function () {
+      $('drop').hidden = true; $('panel').hidden = false;
+      if (!renderer) initThree(); else onResize();
+      var url = URL.createObjectURL(file), loader = new window.THREE.GLTFLoader();
+      loader.load(url, function (gltf) {
+        if (curRoot) scene.remove(curRoot);
+        curRoot = gltf.scene; scene.add(curRoot);
+        var meshes = 0, tris = 0; curRoot.traverse(function (o) { if (o.isMesh) { meshes++; var g = o.geometry; if (g && g.index) tris += g.index.count / 3; else if (g && g.attributes.position) tris += g.attributes.position.count / 3; } });
+        frame(curRoot);
+        $('info').textContent = file.name; $('hud').textContent = meshes + ' maillage' + (meshes > 1 ? 's' : '') + ' · ' + Math.round(tris).toLocaleString('fr') + ' triangles';
+        $('hud').dataset.meshes = meshes;
+        hideToast(); URL.revokeObjectURL(url);
+      }, undefined, function (err) { toast('<span class="lead">Erreur</span> modèle illisible ou incompatible.', true); URL.revokeObjectURL(url); });
+    }).catch(function (e) { toast('<span class="lead">Erreur</span> ' + e.message, true); });
+  }
+
+  $('reset').addEventListener('click', function () { if (curRoot) { scene.remove(curRoot); curRoot = null; } $('panel').hidden = true; $('drop').hidden = false; hideToast(); });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { if ($('file').files[0]) open($('file').files[0]); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) open(e.dataTransfer.files[0]); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+})();
+</script>
+</body>
+</html>

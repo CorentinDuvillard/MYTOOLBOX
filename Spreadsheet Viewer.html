@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tableur CSV / XLSX</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .sheets{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
+  .sheets button{font-family:inherit;font-size:12.5px;padding:6px 12px;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;cursor:pointer}
+  .sheets button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
+  .tablewrap{border:1px solid var(--line);border-radius:var(--radius);overflow:auto;max-height:60vh}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;min-width:60px;white-space:nowrap}
+  th{background:var(--surface-2);position:sticky;top:0;font-family:var(--font-mono);font-size:11px;color:var(--faint);z-index:1}
+  td{background:var(--surface)} td:focus{outline:2px solid var(--accent);outline-offset:-2px;background:var(--accent-soft)}
+  tr:first-child td{font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></span>Tableur CSV / XLSX</div>
+    <span class="tag">CSV · XLSX</span>
+  </header>
+  <p class="sub">Ouvrez, consultez et modifiez des fichiers CSV ou Excel (XLSX/XLS) sous forme de tableau, puis exportez. Lecture/écriture locale via SheetJS.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir un fichier">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+    <h2>Glissez un fichier CSV ou XLSX</h2><p>ou cliquez pour le sélectionner</p>
+  </div>
+  <input type="file" id="file" accept=".csv,.xlsx,.xls,text/csv" hidden>
+
+  <div id="panel" hidden>
+    <div class="toolbar"><span class="summary" id="info"></span>
+      <div class="row" style="margin-left:auto"><button class="btn" id="dlCsv">Export CSV</button><button class="btn primary" id="dlXlsx">Export XLSX</button><button class="btn ghost" id="reset">Autre fichier</button></div>
+    </div>
+    <div class="sheets" id="sheets"></div>
+    <div class="tablewrap"><table id="table"></table></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SRC = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js", libP = null;
+  function lib() { if (window.XLSX) return Promise.resolve(window.XLSX); if (libP) return libP; libP = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = SRC; s.onload = function () { res(window.XLSX); }; s.onerror = function () { libP = null; rej(new Error('Échec du chargement de SheetJS.')); }; document.head.appendChild(s); }); return libP; }
+  var wb = null, active = 0, fileName = 'classeur';
+  function toast(m, w) { $('toast').className = 'toast show' + (w ? ' warn' : ''); $('toast').innerHTML = m; }
+  function hideToast() { $('toast').className = 'toast'; }
+
+  function open(file) {
+    fileName = file.name.replace(/\.[^.]+$/, ''); toast('<span class="lead">Lecture</span>…');
+    file.arrayBuffer().then(function (ab) { return lib().then(function (XLSX) { return XLSX.read(ab, { type: 'array' }); }); })
+      .then(function (book) { wb = book; active = 0; $('drop').hidden = true; $('panel').hidden = false; hideToast(); renderTabs(); renderSheet(); })
+      .catch(function (e) { toast('<span class="lead">Erreur</span> ' + (e.message || 'fichier illisible'), true); });
+  }
+
+  function renderTabs() {
+    $('sheets').innerHTML = ''; $('info').innerHTML = '<b>' + wb.SheetNames.length + '</b> feuille' + (wb.SheetNames.length > 1 ? 's' : '');
+    if (wb.SheetNames.length < 2) { $('sheets').style.display = 'none'; return; } $('sheets').style.display = 'flex';
+    wb.SheetNames.forEach(function (n, i) { var b = document.createElement('button'); b.textContent = n; b.setAttribute('aria-pressed', i === active); b.onclick = function () { captureEdits(); active = i; renderTabs(); renderSheet(); }; $('sheets').appendChild(b); });
+  }
+
+  function renderSheet() {
+    var XLSX = window.XLSX, ws = wb.Sheets[wb.SheetNames[active]];
+    var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    var cols = aoa.reduce(function (m, r) { return Math.max(m, r.length); }, 0) || 1;
+    var html = '<thead><tr>'; for (var c = 0; c < cols; c++) html += '<th>' + colName(c) + '</th>'; html += '</tr></thead><tbody>';
+    aoa.forEach(function (row) { html += '<tr>'; for (var c = 0; c < cols; c++) html += '<td contenteditable="true">' + esc(row[c] == null ? '' : String(row[c])) + '</td>'; html += '</tr>'; });
+    if (!aoa.length) html += '<tr><td contenteditable="true"></td></tr>';
+    html += '</tbody>'; $('table').innerHTML = html;
+  }
+  function colName(n) { var s = ''; n++; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+
+  function captureEdits() {
+    if (!wb) return; var XLSX = window.XLSX, rows = $('table').querySelectorAll('tbody tr'), aoa = [];
+    rows.forEach(function (tr) { aoa.push(Array.prototype.map.call(tr.children, function (td) { var v = td.textContent; var n = Number(v); return v !== '' && !isNaN(n) && /^-?\d*\.?\d+$/.test(v.trim()) ? n : v; })); });
+    wb.Sheets[wb.SheetNames[active]] = XLSX.utils.aoa_to_sheet(aoa);
+  }
+  function dl(blob, name) { var u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1500); }
+
+  $('dlCsv').addEventListener('click', function () { captureEdits(); var XLSX = window.XLSX; var csv = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[active]]); dl(new Blob([csv], { type: 'text/csv' }), fileName + '.csv'); });
+  $('dlXlsx').addEventListener('click', function () { captureEdits(); var XLSX = window.XLSX; var out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }); dl(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName + '.xlsx'); });
+  $('reset').addEventListener('click', function () { wb = null; $('panel').hidden = true; $('drop').hidden = false; hideToast(); });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { if ($('file').files[0]) open($('file').files[0]); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) open(e.dataTransfer.files[0]); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+})();
+</script>
+</body>
+</html>
