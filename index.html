@@ -125,6 +125,28 @@
     .card-btn:active { transform: scale(.98); }
     .card-btn[disabled] { opacity: .55; cursor: wait; }
 
+    /* ───── Familles (catégories) ───── */
+    .cat-card { cursor: pointer; }
+    .cat-card .card-icon { width: 52px; height: 52px; border-radius: 14px; }
+    .cat-card h3 { font-size: 24px; }
+    .cat-card:hover .card-btn { background: var(--accent-hover); }
+    .cat-card .card-btn { transition: background .15s ease; }
+    .cat-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+    .cat-bar {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 4px clamp(20px, 5vw, 72px) 0;
+    }
+    .cat-bar[hidden] { display: none; }
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: none; border: 1px solid var(--line); border-radius: 999px;
+      padding: 8px 16px; font-family: inherit; font-size: 13px; font-weight: 500;
+      color: var(--text); cursor: pointer; transition: border-color .15s ease, color .15s ease;
+    }
+    .back-link:hover { border-color: var(--accent-line); color: var(--accent); }
+    .cat-title { font-size: 13px; color: var(--muted); font-weight: 500; }
+
     .footer {
       margin-top: auto;
       padding: 22px clamp(20px, 5vw, 72px);
@@ -203,13 +225,14 @@
         Créez, convertissez et <em>analysez</em><br />
         directement depuis votre navigateur.
       </h1>
-      <p class="hero-lead">
-        Toolbox rassemble des outils légers — image, média, PDF, archives,
-        conversion et dev — dans une interface unifiée, sobre et sans installation.
+      <p class="hero-lead" id="heroSub">
+        Choisissez une famille d'outils. Tout s'exécute dans votre navigateur, sans installation.
       </p>
     </section>
 
     <div class="error-banner" id="errorBanner" role="alert" hidden></div>
+
+    <div class="cat-bar" id="catBar" hidden></div>
 
     <section id="studios" class="studios" aria-label="Studios disponibles">
       <h2 class="sr-only">Studios disponibles</h2>
@@ -469,25 +492,91 @@
     var reactRoot = null;   // racine ReactDOM montée
     var stackPromise = null; // chargement (unique) des libs lourdes
 
-    // ─── Rendu statique des cartes (vanilla, instantané) ───
-    STUDIOS.forEach(function (s) {
+    // ─── Familles (grandes catégories) ───
+    var catBarEl = document.getElementById("catBar");
+    var heroSubEl = document.getElementById("heroSub");
+
+    // Rattache chaque outil (par id) à une famille — sans toucher le tableau STUDIOS.
+    var CAT_OF = {
+      vision: "image", imgconvert: "image", imgcompress: "image", imgresize: "image", favicon: "image", exif: "image", colorpick: "image", color: "image",
+      pdf: "pdf", pdforg: "pdf", img2pdf: "pdf", pdf2img: "pdf", pdfnum: "pdf", pdfwm: "pdf", docx: "pdf",
+      json: "dev", xml: "dev", yaml: "dev", base64: "dev", hash: "dev", uuidpw: "dev", regex: "dev", diff: "dev", markdown: "dev", units: "dev", sheet: "dev",
+      record: "media", media: "media",
+      qr: "utils", archive: "utils", glb: "utils"
+    };
+    var CATEGORIES = [
+      { id: "image", name: "Image", desc: "Éditer, convertir, compresser, redimensionner, favicon, EXIF, couleurs.",
+        icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-5-5L5 21"/></svg>' },
+      { id: "pdf", name: "PDF & Documents", desc: "Fusionner, organiser, numéroter, filigraner, convertir, lire (PDF, DOCX).",
+        icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 14h6M9 18h4"/></svg>' },
+      { id: "dev", name: "Données & Dev", desc: "JSON/XML/YAML, hash, Base64, regex, diff, Markdown, tableur, unités…",
+        icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg>' },
+      { id: "media", name: "Média", desc: "Enregistrer (audio/vidéo) et éditer : couper, convertir, GIF, fusionner.",
+        icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="3"/><path d="m10 8 6 4-6 4V8z"/></svg>' },
+      { id: "utils", name: "Utilitaires", desc: "QR code, décompression .zip par lots, visualiseur 3D (.glb/.gltf).",
+        icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg>' }
+    ];
+    function toolsOf(catId) { return STUDIOS.filter(function (s) { return CAT_OF[s.id] === catId; }); }
+    function catOf(id) { for (var i = 0; i < CATEGORIES.length; i++) if (CATEGORIES[i].id === id) return CATEGORIES[i]; return null; }
+
+    function makeToolCard(s) {
       var card = document.createElement("article");
       card.className = "card";
       card.innerHTML =
         '<div class="card-head"><div class="card-icon">' + s.icon + '</div>' +
         '<span class="card-tag">' + s.tag + '</span></div>' +
         '<h3></h3><p></p><div class="card-use"></div>' +
-        '<button class="card-btn" type="button"><span class="lbl">Ouvrir le studio →</span><span class="sr-only"></span></button>';
+        '<button class="card-btn" type="button"><span class="lbl">Ouvrir →</span><span class="sr-only"></span></button>';
       card.querySelector("h3").textContent = s.name;
       card.querySelector("p").textContent = s.desc;
       card.querySelector(".card-use").textContent = s.use;
       var btn = card.querySelector(".card-btn");
-      // Le nom (lecteur d'écran) suit le libellé visible -> nom accessible
-      // unique ET conforme « Label in Name » (le texte visible en est préfixe).
       btn.querySelector(".sr-only").textContent = " " + s.name;
       btn.addEventListener("click", function () { openStudio(s, btn); });
-      studiosEl.appendChild(card);
-    });
+      return card;
+    }
+    function makeCatCard(cat) {
+      var n = toolsOf(cat.id).length;
+      var card = document.createElement("article");
+      card.className = "card cat-card";
+      card.setAttribute("role", "button");
+      card.setAttribute("tabindex", "0");
+      card.setAttribute("aria-label", "Ouvrir la famille " + cat.name + " (" + n + " outils)");
+      card.innerHTML =
+        '<div class="card-head"><div class="card-icon">' + cat.icon + '</div>' +
+        '<span class="card-tag">' + n + ' outils</span></div>' +
+        '<h3></h3><p></p>' +
+        '<span class="card-btn" aria-hidden="true"><span class="lbl">Voir les ' + n + ' outils →</span></span>';
+      card.querySelector("h3").textContent = cat.name;
+      card.querySelector("p").textContent = cat.desc;
+      function go() { showCategory(cat.id); }
+      card.addEventListener("click", go);
+      card.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+      return card;
+    }
+
+    function resetStudios() { studiosEl.innerHTML = '<h2 class="sr-only">Studios disponibles</h2>'; }
+
+    function showHome() {
+      hideError(); resetStudios(); catBarEl.hidden = true;
+      heroSubEl.textContent = "Choisissez une famille d'outils. Tout s'exécute dans votre navigateur, sans installation.";
+      CATEGORIES.forEach(function (cat) { studiosEl.appendChild(makeCatCard(cat)); });
+      try { history.replaceState({ view: "home" }, ""); } catch (e) {}
+    }
+    function showCategory(catId) {
+      var cat = catOf(catId); if (!cat) return showHome();
+      hideError(); resetStudios();
+      var tools = toolsOf(catId);
+      heroSubEl.textContent = cat.desc;
+      catBarEl.hidden = false;
+      catBarEl.innerHTML = '<button class="back-link" type="button">← Toutes les familles</button><span class="cat-title">' + cat.name + ' · ' + tools.length + ' outils</span>';
+      catBarEl.querySelector(".back-link").addEventListener("click", showHome);
+      tools.forEach(function (s) { studiosEl.appendChild(makeToolCard(s)); });
+      try { history.pushState({ view: "cat", id: catId }, ""); } catch (e) {}
+    }
+    window.addEventListener("popstate", function (e) { var st = e.state; if (st && st.view === "cat") showCategory(st.id); else showHome(); });
+
+    showHome();
 
     // ─── Chargement d'un script externe (une seule fois) ───
     function loadScriptOnce(src) {
