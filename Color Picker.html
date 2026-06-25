@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipette & palette</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .work{display:grid;grid-template-columns:1fr 240px;gap:22px;margin-top:18px;align-items:start}
+  @media (max-width:720px){.work{grid-template-columns:1fr}}
+  .canvaswrap{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;display:flex;justify-content:center}
+  #canvas{max-width:100%;cursor:crosshair;border-radius:6px}
+  .pick{border:1px solid var(--line);border-radius:var(--radius);padding:16px;background:var(--surface)}
+  .swatch{width:100%;height:70px;border-radius:8px;border:1px solid var(--line);margin-bottom:12px}
+  .val{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .val code{font-family:var(--font-mono);font-size:13px;flex:1;background:var(--surface-2);padding:6px 9px;border-radius:6px;border:1px solid var(--line)}
+  .palette{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .pal{width:64px;cursor:pointer}
+  .pal .c{height:48px;border-radius:8px;border:1px solid var(--line)}
+  .pal .h{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-align:center;margin-top:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3 3-8 8-3 3v3h3l3-3 8-8 3 3"/><path d="m15 5 4 4"/></svg></span>Pipette &amp; palette</div>
+    <span class="tag">Couleurs</span>
+  </header>
+  <p class="sub">Importez une image, cliquez pour relever la couleur d'un pixel, et obtenez une palette des couleurs dominantes. Lecture locale (canvas).</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir une image">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+    <h2>Glissez une image ici</h2><p>ou cliquez pour la sélectionner</p>
+  </div>
+  <input type="file" id="file" accept="image/*" hidden>
+
+  <div id="panel" hidden>
+    <div class="work">
+      <div class="canvaswrap"><canvas id="canvas" aria-label="Image — cliquez pour relever une couleur"></canvas></div>
+      <div class="pick">
+        <div class="swatch" id="swatch"></div>
+        <div class="val"><code id="hex">—</code><button class="btn" data-c="hex">⧉</button></div>
+        <div class="val"><code id="rgb">—</code><button class="btn" data-c="rgb">⧉</button></div>
+        <button class="btn ghost" id="reset" style="width:100%;justify-content:center;margin-top:6px">Autre image</button>
+      </div>
+    </div>
+    <h3 style="margin:22px 0 0;font-size:14px;color:var(--muted)">Palette dominante</h3>
+    <div class="palette" id="palette"></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var cv = $('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true });
+  function hex2(n) { return n.toString(16).padStart(2, '0'); }
+  function toHex(r, g, b) { return '#' + hex2(r) + hex2(g) + hex2(b); }
+  function setPick(r, g, b) { $('swatch').style.background = 'rgb(' + r + ',' + g + ',' + b + ')'; $('hex').textContent = toHex(r, g, b); $('rgb').textContent = 'rgb(' + r + ', ' + g + ', ' + b + ')'; }
+
+  function load(file) {
+    if (!file.type.startsWith('image/')) { $('toast').className = 'toast show warn'; $('toast').textContent = "Ce fichier n'est pas une image."; return; }
+    var img = new Image(); img.onload = function () {
+      var max = 700, s = Math.min(1, max / img.naturalWidth); cv.width = Math.round(img.naturalWidth * s); cv.height = Math.round(img.naturalHeight * s);
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      $('drop').hidden = true; $('panel').hidden = false; $('toast').className = 'toast';
+      palette(); var d = ctx.getImageData(Math.floor(cv.width / 2), Math.floor(cv.height / 2), 1, 1).data; setPick(d[0], d[1], d[2]);
+    };
+    img.onerror = function () { $('toast').className = 'toast show warn'; $('toast').textContent = 'Image illisible.'; };
+    img.src = URL.createObjectURL(file);
+  }
+
+  function pickAt(e) {
+    var rect = cv.getBoundingClientRect(), x = Math.floor((e.clientX - rect.left) * cv.width / rect.width), y = Math.floor((e.clientY - rect.top) * cv.height / rect.height);
+    x = Math.max(0, Math.min(cv.width - 1, x)); y = Math.max(0, Math.min(cv.height - 1, y));
+    var d = ctx.getImageData(x, y, 1, 1).data; setPick(d[0], d[1], d[2]);
+  }
+
+  function palette() {
+    var s = 64, tc = document.createElement('canvas'); tc.width = s; tc.height = s; var tctx = tc.getContext('2d', { willReadFrequently: true });
+    tctx.drawImage(cv, 0, 0, s, s); var data = tctx.getImageData(0, 0, s, s).data;
+    var buckets = {};
+    for (var i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue;
+      var r = data[i] >> 5 << 5, g = data[i + 1] >> 5 << 5, b = data[i + 2] >> 5 << 5, key = r + ',' + g + ',' + b;
+      if (!buckets[key]) buckets[key] = { n: 0, r: 0, g: 0, b: 0 };
+      var bk = buckets[key]; bk.n++; bk.r += data[i]; bk.g += data[i + 1]; bk.b += data[i + 2];
+    }
+    var arr = Object.keys(buckets).map(function (k) { var b = buckets[k]; return { n: b.n, r: Math.round(b.r / b.n), g: Math.round(b.g / b.n), b: Math.round(b.b / b.n) }; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 8);
+    $('palette').innerHTML = '';
+    arr.forEach(function (c) {
+      var h = toHex(c.r, c.g, c.b), el = document.createElement('div'); el.className = 'pal';
+      el.innerHTML = '<div class="c" style="background:' + h + '"></div><div class="h">' + h + '</div>'; el.title = 'Copier ' + h;
+      el.onclick = function () { setPick(c.r, c.g, c.b); navigator.clipboard.writeText(h); };
+      $('palette').appendChild(el);
+    });
+  }
+
+  cv.addEventListener('click', pickAt);
+  cv.addEventListener('mousemove', function (e) { if (e.buttons === 1) pickAt(e); });
+  Array.prototype.forEach.call(document.querySelectorAll('.pick .btn[data-c]'), function (b) { b.addEventListener('click', function () { navigator.clipboard.writeText($(b.dataset.c).textContent).then(function () { var o = b.textContent; b.textContent = '✓'; setTimeout(function () { b.textContent = o; }, 900); }); }); });
+  $('reset').addEventListener('click', function () { $('panel').hidden = true; $('drop').hidden = false; });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { if ($('file').files[0]) load($('file').files[0]); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+})();
+</script>
+</body>
+</html>
