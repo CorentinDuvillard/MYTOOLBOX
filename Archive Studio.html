@@ -5,33 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Décompression par lots</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Socle commun : charte centralisée (mêmes couleurs & typo que la vitrine) -->
+<link rel="stylesheet" href="./theme.css">
 <style>
+  /* Les tokens partagés (--bg, --surface, --text, --line, --muted, --faint…)
+     viennent de theme.css. On n'aliase ici que les noms spécifiques à cet
+     outil vers les tokens centraux -> charte modifiable en un seul endroit. */
   :root{
-    --bg:#15110d; --bg-2:#1d1813; --surface:#241e17; --surface-2:#2c251c;
-    --line:#3a3228; --line-soft:#2a241c;
-    --text:#f1e9dc; --muted:#a39684; --faint:#6f6453;
-    --gold:#e0a458; --gold-soft:rgba(224,164,88,.13); --gold-line:rgba(224,164,88,.35);
-    --sage:#9bbd84; --sage-soft:rgba(155,189,132,.13);
-    --rust:#cf7152; --rust-soft:rgba(207,113,82,.13);
+    --bg-2: var(--surface-2);
+    --line-soft: var(--line);
+    /* État primaire / en cours -> accent rouge */
+    --gold: var(--accent); --gold-soft: var(--accent-soft); --gold-line: var(--accent-line);
+    /* Succès / terminé -> noir neutre (charte : pas de couleur hors rouge) */
+    --sage: var(--text); --sage-soft: var(--surface-2);
+    /* Erreur / échec -> accent rouge */
+    --rust: var(--accent); --rust-soft: var(--accent-soft);
     --r:14px; --r-sm:9px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
   body{
-    background:
-      radial-gradient(1200px 600px at 70% -10%, rgba(224,164,88,.06), transparent 60%),
-      radial-gradient(900px 500px at -10% 110%, rgba(155,189,132,.05), transparent 55%),
-      var(--bg);
+    background: var(--bg);
     color:var(--text);
-    font-family:'Space Grotesk',system-ui,sans-serif;
+    font-family:var(--font);
     -webkit-font-smoothing:antialiased;
     line-height:1.5;
     padding:clamp(20px,4vw,52px) clamp(16px,4vw,40px);
   }
-  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
   .wrap{max-width:920px;margin:0 auto}
 
   /* Header */
@@ -47,7 +48,7 @@
   }
   .glyph svg{width:17px;height:17px}
   .tag{
-    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;
     text-transform:uppercase;color:var(--faint);
     padding:3px 8px;border:1px solid var(--line);border-radius:99px;
   }
@@ -76,7 +77,7 @@
   .drop h2{font-size:17px;font-weight:600;letter-spacing:-.01em}
   .drop.compact .dz-text{flex:1}
   .drop p{color:var(--muted);font-size:13.5px;margin-top:5px}
-  .drop .ext{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--faint);margin-top:12px;letter-spacing:.04em}
+  .drop .ext{font-family:var(--font-mono);font-size:11.5px;color:var(--faint);margin-top:12px;letter-spacing:.04em}
   .drop.compact .ext{display:none}
   .drop .more{
     display:none;font-size:12.5px;color:var(--gold);font-weight:500;
@@ -93,7 +94,7 @@
   }
   .toolbar.show{display:flex}
   .summary{font-size:13px;color:var(--muted);margin-right:auto}
-  .summary b{color:var(--text);font-family:'JetBrains Mono',monospace;font-weight:600}
+  .summary b{color:var(--text);font-family:var(--font-mono);font-weight:600}
   .btn{
     font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;
     border:1px solid var(--line);background:var(--surface);color:var(--text);
@@ -103,8 +104,8 @@
   .btn svg{width:15px;height:15px}
   .btn:hover{border-color:var(--faint);background:var(--surface-2)}
   .btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
-  .btn.primary{background:var(--gold);border-color:var(--gold);color:#241a0c;font-weight:600}
-  .btn.primary:hover{background:#ecb56a;border-color:#ecb56a}
+  .btn.primary{background:var(--gold);border-color:var(--gold);color:var(--on-accent);font-weight:600}
+  .btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
   .btn.ghost{background:transparent}
   .btn:disabled{opacity:.45;cursor:default;pointer-events:none}
 
@@ -114,7 +115,7 @@
     font-size:13px;border:1px solid var(--line);background:var(--bg-2);color:var(--muted);
   }
   .toast.show{display:block}
-  .toast.warn{border-color:var(--gold-line);background:var(--gold-soft);color:#f0d4a8}
+  .toast.warn{border-color:var(--gold-line);background:var(--gold-soft);color:var(--accent-hover)}
   .toast .lead{color:var(--gold);font-weight:600;margin-right:6px}
 
   /* List */
@@ -143,20 +144,20 @@
   .ficon{flex:none;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);
     background:var(--surface-2);display:grid;place-items:center;color:var(--muted)}
   .ficon svg{width:17px;height:17px}
-  .card.done .ficon{color:var(--sage);border-color:rgba(155,189,132,.3)}
-  .card.fail .ficon{color:var(--rust);border-color:rgba(207,113,82,.3)}
+  .card.done .ficon{color:var(--sage);border-color:var(--line-strong)}
+  .card.fail .ficon{color:var(--rust);border-color:var(--accent-line)}
   .meta{flex:1;min-width:0}
   .fname{font-weight:600;font-size:14.5px;letter-spacing:-.01em;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .fstat{font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .fstat .dot{width:3px;height:3px;border-radius:99px;background:var(--faint)}
   .badge{
-    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;
     text-transform:uppercase;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)
   }
   .card.working .badge{color:var(--gold);border-color:var(--gold-line);background:var(--gold-soft)}
-  .card.done .badge{color:var(--sage);border-color:rgba(155,189,132,.3);background:var(--sage-soft)}
-  .card.fail .badge{color:var(--rust);border-color:rgba(207,113,82,.3);background:var(--rust-soft)}
+  .card.done .badge{color:var(--sage);border-color:var(--line-strong);background:var(--sage-soft)}
+  .card.fail .badge{color:var(--rust);border-color:var(--accent-line);background:var(--rust-soft)}
   .iconbtn{
     flex:none;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;
     border:1px solid var(--line);background:var(--bg-2);color:var(--muted);
@@ -183,7 +184,7 @@
   .filerow:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
   .filerow .fi{width:14px;height:14px;color:var(--faint);flex:none}
   .filerow .nm{font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .filerow .sz{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--faint);flex:none}
+  .filerow .sz{font-family:var(--font-mono);font-size:11.5px;color:var(--faint);flex:none}
   .filerow .dl{width:14px;height:14px;color:var(--gold);opacity:0;flex:none;transition:opacity .12s ease}
   .filerow:hover .dl{opacity:1}
   .errmsg{padding:14px 20px 16px 22px;color:var(--rust);font-size:13px;

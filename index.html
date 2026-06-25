@@ -3,30 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Toolbox — Studios créatifs</title>
+  <title>Toolbox — Studios créatifs locaux</title>
+  <meta name="description" content="Toolbox réunit quatre outils créatifs légers — image, capture média, PDF et archives — dans une interface unifiée, sobre et sans installation. Tout s'exécute dans le navigateur." />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23141414'/%3E%3Ctext x='16' y='23' font-family='sans-serif' font-size='19' font-weight='700' fill='white' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E" />
 
-  <!-- React + Tailwind + Babel standalone (tous les studios s'appuient dessus) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Socle commun : charte centralisée (couleurs, typo, espacements) -->
+  <link rel="stylesheet" href="./theme.css" />
+
+  <!-- Les libs lourdes (React, Babel, Tailwind) ne sont PLUS chargées au
+       démarrage : la landing est 100% statique. On se contente de préconnecter
+       aux CDN pour accélérer le chargement à la demande d'un studio. -->
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com" />
 
   <style>
-    :root {
-      --cream:#FAF7F2; --cream-dark:#F3EDE4; --sand:#E8DFD1;
-      --camel:#C4A87C; --camel-light:#D4BE9A; --camel-dark:#A8895E;
-      --brown:#6B5B4E; --brown-dark:#4A3F35; --brown-deep:#3A3129;
-      --text:#3A3129; --text-light:#7A6E63; --text-muted:#A69A8E;
-      --white:#FFF;
-    }
     * { box-sizing: border-box; }
-    html, body, #root { margin: 0; padding: 0; min-height: 100%; }
+    html, body { margin: 0; padding: 0; min-height: 100%; }
     body {
-      background: var(--cream);
+      background: var(--bg);
       color: var(--text);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      font-family: var(--font);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+    }
+    a { color: inherit; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
     }
 
     /* ───── Landing ───── */
@@ -34,39 +40,39 @@
     .landing-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 22px clamp(20px, 5vw, 72px);
-      border-bottom: 1px solid rgba(107,91,78,.08);
+      border-bottom: 1px solid var(--line);
     }
     .brand { display: flex; align-items: center; gap: 12px; }
     .brand-mark {
       width: 34px; height: 34px; border-radius: 10px;
-      background: linear-gradient(135deg, var(--camel), var(--camel-dark));
+      background: var(--text); color: var(--bg);
       display: flex; align-items: center; justify-content: center;
-      color: #fff; font-weight: 600; letter-spacing: .5px; font-size: 14px;
+      font-weight: 700; letter-spacing: .5px; font-size: 15px;
     }
     .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
-    .brand-name { font-size: 15px; font-weight: 600; color: var(--brown-deep); letter-spacing: -.01em; }
-    .brand-sub { font-size: 11px; color: var(--text-muted); letter-spacing: .04em; text-transform: uppercase; }
-    .nav { display: flex; gap: 28px; font-size: 13.5px; color: var(--text-light); }
-    .nav a { color: inherit; text-decoration: none; transition: color .15s ease; }
-    .nav a:hover { color: var(--brown-dark); }
+    .brand-name { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -.01em; }
+    .brand-sub { font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+    .nav { display: flex; gap: 28px; font-size: 13.5px; color: var(--muted); }
+    .nav a { text-decoration: none; transition: color .15s ease; }
+    .nav a:hover { color: var(--accent); }
 
     .hero {
       padding: clamp(56px, 9vw, 112px) clamp(20px, 5vw, 72px) clamp(28px, 4vw, 48px);
       max-width: 980px;
     }
     .hero-eyebrow {
-      font-size: 11px; font-weight: 600; letter-spacing: .18em;
-      text-transform: uppercase; color: var(--camel-dark); margin-bottom: 20px;
+      font-size: 11px; font-weight: 700; letter-spacing: .18em;
+      text-transform: uppercase; color: var(--accent-hover); margin-bottom: 20px;
     }
     .hero-title {
       font-size: clamp(32px, 5.2vw, 56px); line-height: 1.05;
-      font-weight: 500; letter-spacing: -.022em;
-      color: var(--brown-deep); margin: 0 0 20px;
+      font-weight: 600; letter-spacing: -.022em;
+      color: var(--text); margin: 0 0 20px;
     }
-    .hero-title em { font-style: normal; color: var(--camel-dark); }
+    .hero-title em { font-style: normal; color: var(--accent); }
     .hero-lead {
       font-size: clamp(15px, 1.5vw, 18px); line-height: 1.6;
-      color: var(--text-light); max-width: 620px; margin: 0;
+      color: var(--muted); max-width: 620px; margin: 0;
     }
 
     .studios {
@@ -76,377 +82,370 @@
       gap: 20px;
     }
     .card {
-      background: var(--cream-dark);
-      border: 1px solid rgba(107,91,78,.08);
-      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
       padding: 28px;
       display: flex; flex-direction: column; gap: 14px;
       transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
     }
     .card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 18px 44px -26px rgba(58,49,41,.35);
-      border-color: rgba(168,137,94,.28);
+      box-shadow: var(--shadow);
+      border-color: var(--accent-line);
     }
     .card-head { display: flex; align-items: center; justify-content: space-between; }
     .card-icon {
       width: 44px; height: 44px; border-radius: 12px;
-      background: var(--sand); color: var(--brown-dark);
+      background: var(--surface-2); color: var(--text);
       display: flex; align-items: center; justify-content: center;
+      transition: background .2s ease, color .2s ease;
     }
+    .card:hover .card-icon { background: var(--accent); color: var(--on-accent); }
     .card-tag {
       font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
-      color: var(--camel-dark); font-weight: 600;
+      color: var(--accent-hover); font-weight: 700;
     }
     .card h3 {
       font-size: 22px; font-weight: 600; letter-spacing: -.012em;
-      margin: 2px 0 0; color: var(--brown-deep);
+      margin: 2px 0 0; color: var(--text);
     }
-    .card p {
-      font-size: 14px; line-height: 1.55; color: var(--text-light); margin: 0;
-    }
-    .card-use {
-      font-size: 12px; color: var(--text-muted); margin-top: -4px;
-    }
+    .card p { font-size: 14px; line-height: 1.55; color: var(--muted); margin: 0; }
+    .card-use { font-size: 12px; color: var(--faint); margin-top: -4px; }
     .card-btn {
       margin-top: 6px; align-self: flex-start;
       display: inline-flex; align-items: center; gap: 8px;
       padding: 10px 18px; border-radius: 999px;
-      background: var(--brown-deep); color: var(--cream);
-      border: none; font-size: 13px; font-weight: 500;
+      background: var(--accent); color: var(--on-accent);
+      border: none; font-size: 13px; font-weight: 600;
       cursor: pointer; font-family: inherit;
       transition: background .15s ease, transform .1s ease;
     }
-    .card-btn:hover { background: var(--brown-dark); }
+    .card-btn:hover { background: var(--accent-hover); }
     .card-btn:active { transform: scale(.98); }
     .card-btn[disabled] { opacity: .55; cursor: wait; }
 
     .footer {
       margin-top: auto;
       padding: 22px clamp(20px, 5vw, 72px);
-      border-top: 1px solid rgba(107,91,78,.08);
-      font-size: 12px; color: var(--text-muted);
-      display: flex; justify-content: space-between; align-items: center;
+      border-top: 1px solid var(--line);
+      font-size: 12px; color: var(--faint);
+      display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
     }
 
     .error-banner {
       margin: 0 clamp(20px, 5vw, 72px) 24px;
       padding: 12px 16px;
-      background: var(--white);
-      border: 1px solid var(--sand);
-      color: var(--brown-dark);
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-line);
+      color: var(--accent-hover);
       border-radius: 12px;
       font-size: 13px;
     }
+    .error-banner[hidden] { display: none; }
 
     /* ───── Studio stage (studio actif) ───── */
-    .studio-stage {
-      position: fixed; inset: 0; z-index: 10;
-      background: var(--cream);
-      overflow: hidden;
-    }
+    .studio-stage { position: fixed; inset: 0; z-index: 10; background: var(--bg); overflow: hidden; }
+    .studio-stage[hidden] { display: none; }
     .studio-mount { position: absolute; inset: 0; overflow: auto; }
     .studio-back {
       position: fixed; top: 14px; left: 14px; z-index: 1000;
       display: inline-flex; align-items: center; gap: 8px;
       padding: 9px 16px; border-radius: 999px;
-      background: rgba(250,247,242,.92);
-      color: var(--brown-deep);
-      border: 1px solid rgba(107,91,78,.18);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      font-size: 13px; font-weight: 500; cursor: pointer;
-      font-family: inherit;
-      box-shadow: 0 8px 22px -14px rgba(58,49,41,.5);
-      transition: background .15s ease, border-color .15s ease;
+      background: rgba(255, 255, 255, .92);
+      color: var(--text);
+      border: 1px solid var(--line-strong);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
+      box-shadow: var(--shadow-soft);
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
     }
-    .studio-back:hover {
-      background: var(--cream);
-      border-color: rgba(168,137,94,.35);
-    }
+    .studio-back:hover { border-color: var(--accent-line); color: var(--accent); }
     .studio-loader {
-      position: fixed; inset: 0; z-index: 20;
-      background: var(--cream);
+      position: fixed; inset: 0; z-index: 20; background: var(--bg);
       display: flex; align-items: center; justify-content: center;
-      color: var(--text-light); font-size: 14px; letter-spacing: .02em;
+      color: var(--muted); font-size: 14px; letter-spacing: .02em;
     }
+    .studio-loader[hidden] { display: none; }
     .studio-loader .dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: var(--camel); margin-right: 10px;
+      background: var(--accent); margin-right: 10px;
       animation: pulse 1.2s ease-in-out infinite;
     }
     @keyframes pulse { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
 
-    @media (max-width: 600px) {
-      .nav { display: none; }
-    }
+    @media (max-width: 600px) { .nav { display: none; } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <!-- ═══ LANDING STATIQUE (rendue sans React/Babel/Tailwind) ═══ -->
+  <div class="landing">
+    <header class="landing-header">
+      <div class="brand">
+        <div class="brand-mark">T</div>
+        <div class="brand-text">
+          <span class="brand-name">Toolbox</span>
+          <span class="brand-sub">Studio Suite</span>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Navigation principale">
+        <a href="#studios">Studios</a>
+        <a href="#about">À propos</a>
+        <a href="https://github.com/CorentinDuvillard/TOOLBOX" target="_blank" rel="noreferrer noopener">Source</a>
+      </nav>
+    </header>
+
+    <main>
+    <section class="hero">
+      <div class="hero-eyebrow">Quatre outils · Un environnement</div>
+      <h1 class="hero-title">
+        Créez, capturez et <em>annotez</em><br />
+        directement depuis votre navigateur.
+      </h1>
+      <p class="hero-lead">
+        Toolbox rassemble quatre studios légers — image, média, PDF et archives —
+        dans une interface unifiée, sobre et sans installation.
+      </p>
+    </section>
+
+    <div class="error-banner" id="errorBanner" role="alert" hidden></div>
+
+    <section id="studios" class="studios" aria-label="Studios disponibles">
+      <h2 class="sr-only">Studios disponibles</h2>
+    </section>
+    </main>
+
+    <footer class="footer" id="about">
+      <span>© Toolbox — Suite créative locale</span>
+      <span>Tout s'exécute dans le navigateur.</span>
+    </footer>
+  </div>
 
   <!--
     ───────────────────────────────────────────────────────────────
-    LOADER UNIVERSEL DE STUDIOS
-    Les trois studios mélangent deux styles d'export :
+    SHELL APPLICATIF — JavaScript simple (PAS de JSX, donc pas besoin
+    de Babel pour la landing). React, ReactDOM, Babel et Tailwind ne
+    sont chargés QU'À la première ouverture d'un studio (lazy), puis
+    mis en cache. C'est le principal gain de performance.
+
+    Les studios mélangent deux styles d'export :
       • Vision Studio  → expose déjà window.ImageEditor
-      • Record Studio  → `import … from "react"` + `export default`
-      • PDF Studio     → idem Record Studio
-    Babel standalone en script classique refuse les import/export
-    top-level. On les retire en amont, puis on transpile JSX et on
-    exécute dans un scope isolé ; seul `window[globalName]` ressort.
+      • Record / PDF   → `import … from "react"` + `export default`
+    Le loader retire les import/export, shim les hooks, transpile le
+    JSX et exécute dans un scope isolé ; seul window[global] ressort.
+    Archive Studio est une page HTML autonome montée en iframe.
     ───────────────────────────────────────────────────────────────
   -->
   <script>
-    window.__studioCache = window.__studioCache || {};
+  (function () {
+    "use strict";
 
-    async function loadStudio(path, globalName) {
-      if (window[globalName]) return window[globalName];
-      if (window.__studioCache[globalName]) return window.__studioCache[globalName];
-
-      const res = await fetch(path);
-      if (!res.ok) throw new Error(`Chargement échoué (${res.status}) : ${path}`);
-      const raw = await res.text();
-
-      let detected = null;
-      let src = raw
-        // 1) retire les imports ES (seul "react" est utilisé dans ces fichiers)
-        .replace(/^\s*import\s[\s\S]*?from\s+["'][^"']+["'];?\s*$/gm, "")
-        // 2) convertit `export default function X` en `function X`
-        .replace(/export\s+default\s+function\s+(\w+)/, (_, n) => {
-          detected = n;
-          return "function " + n;
-        })
-        // 3) supprime un éventuel `export default X;` résiduel
-        .replace(/export\s+default\s+(\w+)\s*;?/, (_, n) => {
-          if (!detected) detected = n;
-          return "";
-        });
-
-      // 4) shim des hooks React si le fichier ne les destruct pas déjà
-      const hasHookShim = /const\s*\{[^}]*\buseState\b[^}]*\}\s*=\s*React/.test(src);
-      if (!hasHookShim) {
-        src =
-          "const { useState, useEffect, useRef, useCallback, useMemo, " +
-          "useLayoutEffect, useReducer, useContext } = React;\n" + src;
-      }
-
-      // 5) expose le composant racine sur window (si on l'a détecté)
-      if (detected) {
-        src += `\n;window[${JSON.stringify(globalName)}] = ${detected};`;
-      }
-
-      // 6) transpile JSX → JS et exécute dans un scope isolé
-      const out = Babel.transform(src, {
-        presets: ["react"],
-        filename: path,
-        sourceType: "script",
-      });
-      new Function(out.code)();
-
-      if (!window[globalName]) {
-        throw new Error(`Composant racine introuvable après chargement : ${globalName}`);
-      }
-      window.__studioCache[globalName] = window[globalName];
-      return window[globalName];
-    }
-  </script>
-
-  <!-- ─── Shell applicatif : landing + host de studio ─── -->
-  <script type="text/babel">
-    const { useState, useCallback, useEffect } = React;
-
-    // Définition déclarative des studios disponibles
-    const STUDIOS = [
+    // ─── Définition déclarative des studios ───
+    var STUDIOS = [
       {
-        id: "vision",
-        name: "Vision Studio",
-        tag: "Image",
-        use: "Composition visuelle",
-        path: "./Vision%20Studio.jsx",
-        global: "ImageEditor",
+        id: "vision", name: "Vision Studio", tag: "Image", use: "Composition visuelle",
+        path: "./Vision%20Studio.jsx", global: "ImageEditor",
         desc: "Éditeur d'image sur canvas — calques, texte, formes, réglages, export.",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="3" />
-            <circle cx="9" cy="9" r="1.5" />
-            <path d="m21 15-5-5L5 21" />
-          </svg>
-        ),
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>'
       },
       {
-        id: "record",
-        name: "Record Studio",
-        tag: "Capture",
-        use: "Audio, vidéo, audio + vidéo",
-        path: "./Record%20Studio.jsx",
-        global: "RecordStudio",
+        id: "record", name: "Record Studio", tag: "Capture", use: "Audio, vidéo, audio + vidéo",
+        path: "./Record%20Studio.jsx", global: "RecordStudio",
         desc: "Enregistreur navigateur — sélection des sources, prévisualisation, téléchargement.",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" />
-          </svg>
-        ),
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/></svg>'
       },
       {
-        id: "pdf",
-        name: "PDF Studio",
-        tag: "Document",
-        use: "Édition & fusion PDF",
-        path: "./PDF%20Studio.jsx",
-        global: "PDFStudio",
+        id: "pdf", name: "PDF Studio", tag: "Document", use: "Édition & fusion PDF",
+        path: "./PDF%20Studio.jsx", global: "PDFStudio",
         desc: "Annote, dessine, compose du texte et fusionne plusieurs PDF en un seul export.",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
-            <path d="M14 2v6h6" />
-            <path d="M9 14h6M9 18h4" />
-          </svg>
-        ),
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M9 14h6M9 18h4"/></svg>'
       },
       {
-        id: "archive",
-        name: "Archive Studio",
-        tag: "Archive",
-        use: "Décompression .zip par lots",
-        type: "iframe",
-        path: "./Archive%20Studio.html",
+        id: "archive", name: "Archive Studio", tag: "Archive", use: "Décompression .zip par lots",
+        type: "iframe", path: "./Archive%20Studio.html",
         desc: "Décompresse plusieurs archives .zip à la fois — exploration de l'arborescence, export fichier par fichier ou dossier complet.",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 8v13H3V8" />
-            <path d="M1 3h22v5H1z" />
-            <path d="M10 12h4" />
-          </svg>
-        ),
-      },
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>'
+      }
     ];
 
-    function Landing({ onOpen, loadingId, error }) {
-      return (
-        <div className="landing">
-          <header className="landing-header">
-            <div className="brand">
-              <div className="brand-mark">T</div>
-              <div className="brand-text">
-                <span className="brand-name">Toolbox</span>
-                <span className="brand-sub">Studio Suite</span>
-              </div>
-            </div>
-            <nav className="nav">
-              <a href="#studios">Studios</a>
-              <a href="#about">À propos</a>
-              <a href="https://github.com" target="_blank" rel="noreferrer">Source</a>
-            </nav>
-          </header>
+    // ─── CDN des libs lourdes (chargées à la demande) ───
+    var LIBS = {
+      tailwind: "https://cdn.tailwindcss.com",
+      react: "https://unpkg.com/react@18/umd/react.production.min.js",
+      reactDom: "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
+      babel: "https://unpkg.com/@babel/standalone/babel.min.js"
+    };
 
-          <section className="hero">
-            <div className="hero-eyebrow">Quatre outils · Un environnement</div>
-            <h1 className="hero-title">
-              Créez, capturez et <em>annotez</em><br />
-              directement depuis votre navigateur.
-            </h1>
-            <p className="hero-lead">
-              Toolbox rassemble quatre studios légers — image, média, PDF et archives —
-              dans une interface unifiée, sobre et sans installation.
-            </p>
-          </section>
-
-          {error && <div className="error-banner">{error}</div>}
-
-          <section id="studios" className="studios">
-            {STUDIOS.map((s) => (
-              <article key={s.id} className="card">
-                <div className="card-head">
-                  <div className="card-icon">{s.icon}</div>
-                  <span className="card-tag">{s.tag}</span>
-                </div>
-                <h3>{s.name}</h3>
-                <p>{s.desc}</p>
-                <div className="card-use">{s.use}</div>
-                <button
-                  className="card-btn"
-                  onClick={() => onOpen(s)}
-                  disabled={loadingId === s.id}
-                >
-                  {loadingId === s.id ? "Chargement…" : "Ouvrir le studio →"}
-                </button>
-              </article>
-            ))}
-          </section>
-
-          <footer className="footer">
-            <span>© Toolbox — Suite créative locale</span>
-            <span>Tout s'exécute dans le navigateur.</span>
-          </footer>
-        </div>
-      );
+    // Mappe les couleurs Tailwind utilisées par les studios sur les variables
+    // centrales de theme.css. Centralise la charte : changer theme.css suffit.
+    function tailwindColors() {
+      var ch = function (v) { return "rgb(var(" + v + ") / <alpha-value>)"; };
+      var GRAY = {
+        50: ch("--text-rgb"), 100: ch("--text-rgb"), 200: ch("--text-rgb"), 300: ch("--text-rgb"),
+        400: ch("--muted-rgb"), 500: ch("--muted-rgb"), 600: ch("--faint-rgb"),
+        700: ch("--line-rgb"), 800: ch("--line-rgb"), 900: ch("--bg-rgb"), 950: ch("--surface-2-rgb")
+      };
+      var ACC = {
+        50: ch("--accent-rgb"), 100: ch("--accent-rgb"), 200: ch("--accent-rgb"), 300: ch("--accent-rgb"),
+        400: ch("--accent-rgb"), 500: ch("--accent-rgb"), 600: ch("--accent-rgb"),
+        700: ch("--accent-hover-rgb"), 800: ch("--accent-hover-rgb"), 900: ch("--accent-hover-rgb"), 950: ch("--accent-hover-rgb")
+      };
+      return {
+        zinc: GRAY, neutral: GRAY, slate: GRAY, gray: GRAY, stone: GRAY,
+        blue: ACC, indigo: ACC, sky: ACC, red: ACC, rose: ACC, violet: ACC,
+        amber: { 300: ch("--text-rgb"), 400: ch("--text-rgb"), 500: ch("--muted-rgb") },
+        accent: ACC
+      };
     }
 
-    // Hôte du studio actif : monte le composant React récupéré sur window,
-    // ou charge la page HTML autonome dans une iframe selon le type.
-    function StudioStage({ studio, onClose }) {
-      const isIframe = studio.type === "iframe";
-      const Comp = isIframe ? null : window[studio.global];
-      useEffect(() => {
-        const onKey = (e) => { if (e.key === "Escape") onClose(); };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-      }, [onClose]);
+    // ─── DOM refs ───
+    var studiosEl = document.getElementById("studios");
+    var errorEl = document.getElementById("errorBanner");
 
-      return (
-        <div className="studio-stage">
-          <button className="studio-back" onClick={onClose} aria-label="Retour aux studios">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-            Studios
-          </button>
-          <div className="studio-mount">
-            {isIframe
-              ? <iframe
-                  src={studio.path}
-                  title={studio.name}
-                  style={{ width: "100%", height: "100%", border: "none", display: "block" }}
-                />
-              : (Comp ? React.createElement(Comp) : null)}
-          </div>
-        </div>
-      );
+    var stageEl = null;     // élément .studio-stage actif
+    var reactRoot = null;   // racine ReactDOM montée
+    var stackPromise = null; // chargement (unique) des libs lourdes
+
+    // ─── Rendu statique des cartes (vanilla, instantané) ───
+    STUDIOS.forEach(function (s) {
+      var card = document.createElement("article");
+      card.className = "card";
+      card.innerHTML =
+        '<div class="card-head"><div class="card-icon">' + s.icon + '</div>' +
+        '<span class="card-tag">' + s.tag + '</span></div>' +
+        '<h3></h3><p></p><div class="card-use"></div>' +
+        '<button class="card-btn" type="button"><span class="lbl">Ouvrir le studio →</span><span class="sr-only"></span></button>';
+      card.querySelector("h3").textContent = s.name;
+      card.querySelector("p").textContent = s.desc;
+      card.querySelector(".card-use").textContent = s.use;
+      var btn = card.querySelector(".card-btn");
+      // Le nom (lecteur d'écran) suit le libellé visible -> nom accessible
+      // unique ET conforme « Label in Name » (le texte visible en est préfixe).
+      btn.querySelector(".sr-only").textContent = " " + s.name;
+      btn.addEventListener("click", function () { openStudio(s, btn); });
+      studiosEl.appendChild(card);
+    });
+
+    // ─── Chargement d'un script externe (une seule fois) ───
+    function loadScriptOnce(src) {
+      return new Promise(function (resolve, reject) {
+        if (document.querySelector('script[data-src="' + src + '"]')) { resolve(); return; }
+        var s = document.createElement("script");
+        s.src = src; s.crossOrigin = "anonymous"; s.dataset.src = src;
+        s.onload = function () { resolve(); };
+        s.onerror = function () { reject(new Error("Échec de chargement : " + src)); };
+        document.head.appendChild(s);
+      });
     }
 
-    function App() {
-      const [active, setActive] = useState(null);
-      const [loadingId, setLoadingId] = useState(null);
-      const [error, setError] = useState(null);
+    // ─── Charge React + ReactDOM + Babel + Tailwind (lazy, une fois) ───
+    function ensureStack() {
+      if (stackPromise) return stackPromise;
+      stackPromise = loadScriptOnce(LIBS.tailwind)
+        .then(function () {
+          // La config Tailwind doit être posée APRÈS le script du CDN.
+          if (window.tailwind) window.tailwind.config = { theme: { extend: { colors: tailwindColors() } } };
+          return Promise.all([
+            loadScriptOnce(LIBS.react),
+            loadScriptOnce(LIBS.reactDom),
+            loadScriptOnce(LIBS.babel)
+          ]);
+        })
+        .catch(function (e) { stackPromise = null; throw e; });
+      return stackPromise;
+    }
 
-      const open = useCallback(async (studio) => {
-        setError(null);
-        // Studios "iframe" (pages HTML autonomes) : pas de transpilation,
-        // on les monte directement dans un cadre isolé.
-        if (studio.type === "iframe") {
-          setActive(studio);
-          return;
+    // ─── Transpile + exécute un studio JSX, retourne window[global] ───
+    function loadStudio(path, globalName) {
+      if (window[globalName]) return Promise.resolve(window[globalName]);
+      return fetch(path).then(function (res) {
+        if (!res.ok) throw new Error("Chargement échoué (" + res.status + ") : " + path);
+        return res.text();
+      }).then(function (raw) {
+        var detected = null;
+        var src = raw
+          .replace(/^\s*import\s[\s\S]*?from\s+["'][^"']+["'];?\s*$/gm, "")
+          .replace(/export\s+default\s+function\s+(\w+)/, function (_, n) { detected = n; return "function " + n; })
+          .replace(/export\s+default\s+(\w+)\s*;?/, function (_, n) { if (!detected) detected = n; return ""; });
+
+        var hasHookShim = /const\s*\{[^}]*\buseState\b[^}]*\}\s*=\s*React/.test(src);
+        if (!hasHookShim) {
+          src = "const { useState, useEffect, useRef, useCallback, useMemo, " +
+                "useLayoutEffect, useReducer, useContext } = React;\n" + src;
         }
-        setLoadingId(studio.id);
-        try {
-          await loadStudio(studio.path, studio.global);
-          setActive(studio);
-        } catch (e) {
-          setError(e && e.message ? e.message : String(e));
-        } finally {
-          setLoadingId(null);
-        }
-      }, []);
+        if (detected) src += "\n;window[" + JSON.stringify(globalName) + "] = " + detected + ";";
 
-      const close = useCallback(() => setActive(null), []);
-
-      if (active) return <StudioStage studio={active} onClose={close} />;
-      return <Landing onOpen={open} loadingId={loadingId} error={error} />;
+        var out = Babel.transform(src, { presets: ["react"], filename: path, sourceType: "script" });
+        new Function(out.code)();
+        if (!window[globalName]) throw new Error("Composant racine introuvable : " + globalName);
+        return window[globalName];
+      });
     }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    // ─── Ouvre un studio ───
+    function openStudio(studio, btn) {
+      hideError();
+
+      // Studios "iframe" (pages HTML autonomes) : aucun lib lourde requise.
+      if (studio.type === "iframe") {
+        mountStage(studio, null);
+        return;
+      }
+
+      var lbl = btn && btn.querySelector(".lbl");
+      if (btn) { btn.disabled = true; if (lbl) lbl.textContent = "Chargement…"; }
+      ensureStack()
+        .then(function () { return loadStudio(studio.path, studio.global); })
+        .then(function (Comp) { mountStage(studio, Comp); })
+        .catch(function (e) { showError(e && e.message ? e.message : String(e)); })
+        .finally(function () { if (btn) { btn.disabled = false; if (lbl) lbl.textContent = "Ouvrir le studio →"; } });
+    }
+
+    // ─── Construit la scène et monte le studio ───
+    function mountStage(studio, Comp) {
+      stageEl = document.createElement("div");
+      stageEl.className = "studio-stage";
+
+      var back = document.createElement("button");
+      back.className = "studio-back";
+      back.type = "button";
+      back.setAttribute("aria-label", "Retour aux studios");
+      back.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg> Studios';
+      back.addEventListener("click", closeStage);
+
+      var mount = document.createElement("div");
+      mount.className = "studio-mount";
+
+      stageEl.appendChild(back);
+      stageEl.appendChild(mount);
+      document.body.appendChild(stageEl);
+
+      if (studio.type === "iframe") {
+        var frame = document.createElement("iframe");
+        frame.src = studio.path;
+        frame.title = studio.name;
+        frame.style.cssText = "width:100%;height:100%;border:none;display:block;";
+        mount.appendChild(frame);
+      } else {
+        reactRoot = ReactDOM.createRoot(mount);
+        reactRoot.render(React.createElement(Comp));
+      }
+
+      document.addEventListener("keydown", onKey);
+    }
+
+    function closeStage() {
+      document.removeEventListener("keydown", onKey);
+      if (reactRoot) { reactRoot.unmount(); reactRoot = null; }
+      if (stageEl) { stageEl.remove(); stageEl = null; }
+    }
+
+    function onKey(e) { if (e.key === "Escape") closeStage(); }
+
+    function showError(msg) { errorEl.textContent = msg; errorEl.hidden = false; }
+    function hideError() { errorEl.hidden = true; errorEl.textContent = ""; }
+  })();
   </script>
 </body>
 </html>
