@@ -1,0 +1,44 @@
+/* ============================================================
+   Toolbox — Socle commun / charte graphique
+   Source UNIQUE des couleurs, typographie et espacements.
+   Modifier une valeur ici la propage à TOUS les outils.
+
+   Charte : fond blanc · texte & éléments noirs · accent ROUGE.
+   Les variantes *-rgb exposent les canaux pour les opacités
+   (utilisées par la config Tailwind : rgb(var(--x-rgb)/<alpha>)).
+   ============================================================ */
+:root {
+  /* Fonds & surfaces (blanc) */
+  --bg:            #ffffff;  --bg-rgb:         255 255 255;
+  --surface:       #ffffff;  --surface-rgb:    255 255 255;
+  --surface-2:     #f5f5f6;  --surface-2-rgb:  245 245 246;
+  --surface-3:     #ececee;  --surface-3-rgb:  236 236 238;
+
+  /* Lignes / bordures */
+  --line:          #e4e4e7;  --line-rgb:       228 228 231;
+  --line-strong:   #d0d0d4;  --line-strong-rgb:208 208 212;
+
+  /* Texte & éléments principaux (noir) */
+  --text:          #141414;  --text-rgb:        20 20 20;
+  --muted:         #5f5f66;  --muted-rgb:       95 95 102;
+  /* --faint : assez foncé pour rester lisible sur blanc (contraste AA ≥ 4.5:1) */
+  --faint:         #71717a;  --faint-rgb:      113 113 122;
+
+  /* Accent unique : ROUGE (actions, liens actifs, alertes, états) */
+  --accent:        #e10b0b;  --accent-rgb:     225 11 11;
+  --accent-hover:  #c10808;  --accent-hover-rgb:193 8 8;
+  --accent-soft:   rgba(225, 11, 11, .08);
+  --accent-line:   rgba(225, 11, 11, .28);
+  --on-accent:     #ffffff;  /* texte sur fond rouge */
+
+  /* Rayons & ombres */
+  --radius:    14px;
+  --radius-sm: 9px;
+  --radius-lg: 20px;
+  --shadow:       0 18px 44px -26px rgba(20, 20, 20, .28);
+  --shadow-soft:  0 8px 22px -14px rgba(20, 20, 20, .22);
+
+  /* Typographie */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}

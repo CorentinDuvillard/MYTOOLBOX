@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Code</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .tabs{display:inline-flex;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:18px}
+  .tabs button{font-family:inherit;font-size:13px;padding:9px 18px;background:var(--surface);color:var(--muted);border:none;cursor:pointer}
+  .tabs button[aria-selected=true]{background:var(--accent);color:var(--on-accent);font-weight:600}
+  .pane[hidden]{display:none}
+  .qrwrap{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;margin-top:8px}
+  #qrcanvas{border:1px solid var(--line);border-radius:var(--radius);background:#fff;image-rendering:pixelated}
+  .opts{display:grid;gap:12px;flex:1;min-width:220px}
+  .result{margin-top:14px;border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 14px;background:var(--surface);font-family:var(--font-mono);font-size:13px;word-break:break-all;min-height:46px}
+  .status{font-size:13px;margin-top:8px;color:var(--muted)} .status.error{color:var(--accent-hover);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M17 21h.01M21 17v4h-4"/></svg></span>QR Code</div>
+    <span class="tag">Générer · Lire</span>
+  </header>
+  <p class="sub">Générez un QR code à partir d'un texte ou d'une URL, ou lisez le contenu d'une image de QR code. Les bibliothèques sont chargées à la demande, le traitement reste local.</p>
+
+  <div class="tabs" role="tablist">
+    <button id="tabGen" role="tab" aria-selected="true">Générer</button>
+    <button id="tabRead" role="tab" aria-selected="false">Lire</button>
+  </div>
+
+  <section class="pane" id="paneGen" role="tabpanel">
+    <div class="qrwrap">
+      <canvas id="qrcanvas" width="240" height="240" aria-label="Aperçu du QR code"></canvas>
+      <div class="opts">
+        <div class="field"><label for="qtext">Texte ou URL</label><textarea id="qtext" spellcheck="false" style="min-height:90px" placeholder="https://exemple.fr">https://exemple.fr</textarea></div>
+        <div class="row">
+          <div class="field" style="min-width:120px"><label for="ecl">Correction</label><select id="ecl"><option value="L">L (7%)</option><option value="M" selected>M (15%)</option><option value="Q">Q (25%)</option><option value="H">H (30%)</option></select></div>
+          <div class="field" style="min-width:120px"><label for="qsize">Taille (px)</label><input type="number" id="qsize" value="240" min="80" max="1024" step="20"></div>
+        </div>
+        <div class="row"><button class="btn primary" id="dlPng">Télécharger PNG</button></div>
+        <div class="status" id="genStatus" role="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pane" id="paneRead" role="tabpanel" hidden>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir une image de QR code">
+      <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+      <h2>Glissez une image de QR code</h2><p>ou cliquez pour la sélectionner</p>
+    </div>
+    <input type="file" id="qrfile" accept="image/*" hidden>
+    <div class="status" id="readStatus" role="status"></div>
+    <div class="result" id="readResult" hidden></div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="copyRead" hidden>Copier</button></div>
+  </section>
+
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SRC = { qr: "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js", jsqr: "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" };
+  var loaded = {};
+  function ensure(key, glob) {
+    if (window[glob]) return Promise.resolve(window[glob]);
+    if (loaded[key]) return loaded[key];
+    loaded[key] = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = SRC[key]; s.onload = function () { res(window[glob]); }; s.onerror = function () { loaded[key] = null; rej(new Error('Échec du chargement de la bibliothèque.')); }; document.head.appendChild(s); });
+    return loaded[key];
+  }
+
+  // ── Générer ──
+  function draw() {
+    var text = $('qtext').value; if (!text) { var c = $('qrcanvas').getContext('2d'); c.clearRect(0, 0, $('qrcanvas').width, $('qrcanvas').height); return; }
+    $('genStatus').className = 'status'; $('genStatus').textContent = 'Génération…';
+    ensure('qr', 'qrcode').then(function (qrcode) {
+      try {
+        var qr = qrcode(0, $('ecl').value);
+        qr.addData(unescape(encodeURIComponent(text))); // UTF-8 -> octets
+        qr.make();
+        var n = qr.getModuleCount(), size = Math.max(80, +$('qsize').value || 240), margin = 4;
+        var cell = Math.floor(size / (n + margin * 2)) || 1, dim = cell * (n + margin * 2);
+        var cv = $('qrcanvas'); cv.width = dim; cv.height = dim;
+        var ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, dim, dim); ctx.fillStyle = '#000';
+        for (var r = 0; r < n; r++) for (var col = 0; col < n; col++) if (qr.isDark(r, col)) ctx.fillRect((col + margin) * cell, (r + margin) * cell, cell, cell);
+        $('genStatus').textContent = n + '×' + n + ' modules';
+      } catch (e) { $('genStatus').className = 'status error'; $('genStatus').textContent = 'Texte trop long pour un QR code.'; }
+    }).catch(function (e) { $('genStatus').className = 'status error'; $('genStatus').textContent = e.message; });
+  }
+  var deb; ['input', 'change'].forEach(function (ev) { $('qtext').addEventListener(ev, function () { clearTimeout(deb); deb = setTimeout(draw, 200); }); });
+  $('ecl').addEventListener('change', draw); $('qsize').addEventListener('change', draw);
+  $('dlPng').addEventListener('click', function () { $('qrcanvas').toBlob(function (b) { var u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = 'qrcode.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1500); }); });
+
+  // ── Lire ──
+  function readFile(file) {
+    if (!file || !file.type.startsWith('image/')) { $('readStatus').className = 'status error'; $('readStatus').textContent = "Ce fichier n'est pas une image."; return; }
+    $('readStatus').className = 'status'; $('readStatus').textContent = 'Lecture…';
+    ensure('jsqr', 'jsQR').then(function (jsQR) {
+      var img = new Image(); img.onload = function () {
+        var cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        var ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0);
+        var data = ctx.getImageData(0, 0, cv.width, cv.height);
+        var code = jsQR(data.data, data.width, data.height);
+        if (code && code.data) { $('readResult').hidden = false; $('readResult').textContent = code.data; $('copyRead').hidden = false; $('readStatus').textContent = 'QR code décodé.'; }
+        else { $('readResult').hidden = true; $('copyRead').hidden = true; $('readStatus').className = 'status error'; $('readStatus').textContent = 'Aucun QR code détecté dans cette image.'; }
+      };
+      img.onerror = function () { $('readStatus').className = 'status error'; $('readStatus').textContent = 'Image illisible.'; };
+      img.src = URL.createObjectURL(file);
+    }).catch(function (e) { $('readStatus').className = 'status error'; $('readStatus').textContent = e.message; });
+  }
+  $('drop').addEventListener('click', function () { $('qrfile').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('qrfile').click(); } });
+  $('qrfile').addEventListener('change', function () { if ($('qrfile').files[0]) readFile($('qrfile').files[0]); $('qrfile').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); });
+  $('copyRead').addEventListener('click', function () { navigator.clipboard.writeText($('readResult').textContent).then(function () { var b = $('copyRead'), o = b.textContent; b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = o; }, 1100); }); });
+
+  // ── Onglets ──
+  function tab(gen) { $('tabGen').setAttribute('aria-selected', gen); $('tabRead').setAttribute('aria-selected', !gen); $('paneGen').hidden = !gen; $('paneRead').hidden = gen; }
+  $('tabGen').addEventListener('click', function () { tab(true); }); $('tabRead').addEventListener('click', function () { tab(false); });
+
+  draw();
+})();
+</script>
+</body>
+</html>

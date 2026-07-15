@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparateur de texte</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .io{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:760px){.io{grid-template-columns:1fr}}
+  .io textarea{min-height:180px}
+  .diff{margin-top:18px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;font-family:var(--font-mono);font-size:13px}
+  .dl{display:flex;padding:2px 12px;white-space:pre-wrap;word-break:break-word;border-left:3px solid transparent}
+  .dl .gut{color:var(--faint);min-width:20px;flex:none;user-select:none}
+  .dl.del{background:var(--accent-soft);border-left-color:var(--accent)}
+  .dl.del .gut{color:var(--accent)}
+  .dl.add{background:var(--surface-2);border-left-color:var(--text)}
+  .dl.add .gut{color:var(--text)}
+  .summary2{margin-top:10px;font-size:13px;color:var(--muted)}
+  .summary2 b{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v18M15 3v18M3 9h6M15 15h6"/></svg></span>Comparateur de texte</div>
+    <span class="tag">Diff</span>
+  </header>
+  <p class="sub">Comparez deux textes ligne à ligne. Les suppressions apparaissent en rouge, les ajouts en gris. Calcul local (plus longue sous-séquence commune).</p>
+
+  <div class="io">
+    <div class="field"><label for="a">Original</label><textarea id="a" spellcheck="false" placeholder="Version d'origine…">ligne un
+ligne deux
+ligne trois</textarea></div>
+    <div class="field"><label for="b">Modifié</label><textarea id="b" spellcheck="false" placeholder="Version modifiée…">ligne un
+ligne 2 modifiée
+ligne trois
+ligne quatre</textarea></div>
+  </div>
+  <div class="summary2" id="summary"></div>
+  <div class="diff" id="diff"></div>
+
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+
+  // Diff par lignes via table LCS (avec garde-fou de taille).
+  function diff(a, b) {
+    var n = a.length, m = b.length, MAX = 2500;
+    if (n > MAX || m > MAX) return null;
+    var dp = []; for (var i = 0; i <= n; i++) { dp[i] = new Uint32Array(m + 1); }
+    for (i = n - 1; i >= 0; i--) for (var j = m - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    var out = []; i = 0; j = 0;
+    while (i < n && j < m) {
+      if (a[i] === b[j]) { out.push({ t: 'eq', s: a[i] }); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ t: 'del', s: a[i] }); i++; }
+      else { out.push({ t: 'add', s: b[j] }); j++; }
+    }
+    while (i < n) { out.push({ t: 'del', s: a[i++] }); }
+    while (j < m) { out.push({ t: 'add', s: b[j++] }); }
+    return out;
+  }
+
+  function run() {
+    var a = $('a').value.split('\n'), b = $('b').value.split('\n');
+    var d = diff(a, b);
+    if (!d) { $('diff').innerHTML = '<div class="dl">Texte trop volumineux pour la comparaison ligne à ligne.</div>'; $('summary').textContent = ''; return; }
+    var html = '', del = 0, add = 0;
+    d.forEach(function (r) {
+      if (r.t === 'del') del++; if (r.t === 'add') add++;
+      var sign = r.t === 'del' ? '−' : r.t === 'add' ? '+' : ' ';
+      html += '<div class="dl ' + (r.t === 'eq' ? '' : r.t) + '"><span class="gut">' + sign + '</span><span>' + esc(r.s) + '</span></div>';
+    });
+    $('diff').innerHTML = html;
+    $('summary').innerHTML = del || add ? '<b>' + del + '</b> suppression' + (del > 1 ? 's' : '') + ' · <b>' + add + '</b> ajout' + (add > 1 ? 's' : '') : 'Les deux textes sont identiques.';
+  }
+  $('a').addEventListener('input', run); $('b').addEventListener('input', run);
+  run();
+})();
+</script>
+</body>
+</html>

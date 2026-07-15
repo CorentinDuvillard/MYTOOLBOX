@@ -1,4 +1,4 @@
-const { useState, useRef, useCallback, useEffect, useMemo } = React;
+const { useState, useRef, useCallback, useEffect } = React;
 
 // ─── Constants ───
 const FONTS = ["Arial", "Georgia", "Courier New", "Verdana", "Times New Roman", "Trebuchet MS", "Impact", "Comic Sans MS"];
@@ -42,6 +42,8 @@ const makeShapeLayer = (shape = "rect") => ({
 });
 
 // ─── History helper ───
+const HISTORY_MAX = 60; // états conservés (indices valides : 0 .. HISTORY_MAX-1)
+
 function useHistory(initial) {
   const [states, setStates] = useState([initial]);
   const [idx, setIdx] = useState(0);
@@ -51,10 +53,13 @@ function useHistory(initial) {
     setStates(prev => {
       const trimmed = prev.slice(0, idx + 1);
       const newStates = [...trimmed, typeof next === "function" ? next(trimmed[trimmed.length - 1]) : next];
-      if (newStates.length > 60) newStates.shift();
+      if (newStates.length > HISTORY_MAX) newStates.shift();
       return newStates;
     });
-    setIdx(prev => Math.min(prev + 1, 60));
+    // Quand le tableau est plafonné puis décalé, le nouvel état occupe le
+    // dernier index valide (HISTORY_MAX-1), pas idx+1. Sans ce clamp, idx
+    // pointait sur HISTORY_MAX (hors limites) -> state undefined -> crash.
+    setIdx(prev => Math.min(prev + 1, HISTORY_MAX - 1));
   }, [idx]);
 
   const undo = useCallback(() => setIdx(i => Math.max(0, i - 1)), []);
@@ -64,13 +69,6 @@ function useHistory(initial) {
 }
 
 // ─── SVG Icons (inline, minimal) ───
-const Icon = ({ d, size = 18, className = "" }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d={d} />
-  </svg>
-);
-
 const Icons = {
   upload: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12",
   download: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
@@ -114,14 +112,9 @@ const Icons = {
 const Ic = ({ name, size = 18, className = "" }) => {
   const paths = Icons[name];
   if (!paths) return null;
-  const parts = paths.split(/(?=[A-Z])/).join(" ").split("z").join("z ");
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      {paths.split("z").filter(Boolean).map((seg, i) => {
-        const d = seg.trim() + (seg.endsWith("z") ? "" : (i < paths.split("z").length - 2 ? "z" : ""));
-        return <path key={i} d={paths.includes("m") || paths.includes("M") ? undefined : undefined} />;
-      })}
       <path d={paths} />
     </svg>
   );
@@ -457,9 +450,6 @@ function ImageEditor() {
   const canvasToLocal = useCallback((e) => {
     const rect = renderCanvasRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
-    const container = canvasContainerRef.current;
-    const scrollX = container?.scrollLeft || 0;
-    const scrollY = container?.scrollTop || 0;
     return {
       x: (e.clientX - rect.left) / zoom,
       y: (e.clientY - rect.top) / zoom

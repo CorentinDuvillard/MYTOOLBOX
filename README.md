@@ -80,27 +80,49 @@ Structure technique :
 - il n’est pas exposé sur window ;
 - lui aussi nécessite un contrat d’intégration cohérent avant de pouvoir être injecté dans la vitrine HTML existante.
 
+4) Archive Studio
+Rôle :
+- décompression d’archives .zip par lots, 100% locale.
 
-## Contraintes UI 
-La vitrine HTML doit être :
-- lisse ;
-- propre ;
-- minimaliste ;
-- claire ;
-- premium mais sobre ;
-- avec une palette beige/brun donnée.
+Ce que fait l’outil :
+- accepte plusieurs archives .zip d’un coup (glisser-déposer ou sélection) ;
+- lit chaque archive avec JSZip, directement dans le navigateur ;
+- affiche l’arborescence des fichiers (dossiers et fichiers, avec tailles) ;
+- permet de télécharger un fichier précis, tous les fichiers d’une archive, ou tout d’un coup ;
+- permet, sur les navigateurs compatibles, d’écrire directement les fichiers dans un dossier choisi (File System Access API) ;
+- ne prend pas en charge .rar ni .7z.
 
-# Palette utiliser
---cream:#FAF7F2;
---cream-dark:#F3EDE4;
---sand:#E8DFD1;
---camel:#C4A87C;
---camel-light:#D4BE9A;
---camel-dark:#A8895E;
---brown:#6B5B4E;
---brown-dark:#4A3F35;
---brown-deep:#3A3129;
---text:#3A3129;
---text-light:#7A6E63;
---text-muted:#A69A8E;
---white:#FFF;
+Structure technique :
+- contrairement aux autres studios, ce n’est pas un composant React mais une page HTML autonome (JS vanilla) ;
+- elle charge JSZip depuis un CDN et partage la charte commune via `theme.css` ;
+- elle est intégrée à la vitrine via un studio de type `iframe` (champ `type: "iframe"` dans le tableau STUDIOS d’index.html) ;
+- aucune transpilation Babel ni exposition sur window n’est nécessaire : la page est montée telle quelle dans un cadre isolé.
+
+
+## Architecture (relié mais indépendant)
+- `index.html` est une **landing statique** : aucune lib lourde au premier rendu.
+  React, ReactDOM, Babel et Tailwind ne sont chargés **qu’à l’ouverture** d’un
+  studio (lazy load), puis mis en cache.
+- Chaque outil est **autonome** : si l’un échoue à charger, la vitrine et les
+  autres restent fonctionnels (chargement indépendant, erreurs isolées).
+- Le **socle commun** est `theme.css` : il centralise toutes les couleurs, la
+  typographie et les espacements. La config Tailwind (dans `index.html`) mappe
+  les couleurs des studios sur ces mêmes variables.
+
+
+## Contraintes UI / Charte graphique
+La vitrine et tous les outils suivent une charte :
+- lisse, propre, minimaliste, premium mais sobre ;
+- **fond blanc**, **texte & éléments noirs**, **accent rouge** (boutons d’action,
+  liens actifs, alertes, états importants) ;
+- couleurs centralisées dans `theme.css` (modifiables en un seul endroit).
+
+# Palette (voir theme.css)
+--bg:#ffffff;            /* fond */
+--text:#141414;          /* texte & éléments principaux (noir) */
+--muted:#5f5f66;         /* texte secondaire */
+--faint:#71717a;         /* texte tertiaire */
+--line:#e4e4e7;          /* bordures */
+--surface-2:#f5f5f6;     /* surfaces secondaires */
+--accent:#e10b0b;        /* accent rouge (actions, états) */
+--accent-hover:#c10808;  /* survol/accent foncé */

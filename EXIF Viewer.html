@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Métadonnées EXIF</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .work{display:grid;grid-template-columns:280px 1fr;gap:22px;margin-top:18px;align-items:start}
+  @media (max-width:720px){.work{grid-template-columns:1fr}}
+  .preview{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px;text-align:center}
+  .preview img{max-width:100%;max-height:260px;border-radius:6px}
+  .meta{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .mrow{display:flex;gap:12px;padding:8px 14px;border-bottom:1px solid var(--line);font-size:13px}
+  .mrow:last-child{border-bottom:none}
+  .mrow .k{color:var(--muted);min-width:150px;flex:none} .mrow .v{color:var(--text);font-family:var(--font-mono);word-break:break-word}
+  .none{padding:16px;color:var(--muted);font-size:13px}
+  details summary{cursor:pointer;padding:10px 14px;font-size:13px;color:var(--accent-hover);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg></span>Métadonnées EXIF</div>
+    <span class="tag">EXIF · GPS</span>
+  </header>
+  <p class="sub">Lisez les métadonnées EXIF d'une photo (appareil, réglages, date, position GPS), puis téléchargez une copie nettoyée de toutes ces données. Lecture locale (exifr).</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir une image">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+    <h2>Glissez une photo ici</h2><p>ou cliquez pour la sélectionner</p>
+    <div class="ext">JPEG/TIFF pour l'EXIF · tous formats pour le nettoyage</div>
+  </div>
+  <input type="file" id="file" accept="image/*" hidden>
+
+  <div id="panel" hidden>
+    <div class="work">
+      <div>
+        <div class="preview"><img id="preview" alt="Aperçu"></div>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="clean">Télécharger sans métadonnées</button><button class="btn ghost" id="reset">Autre image</button></div>
+      </div>
+      <div><div class="meta" id="meta"></div></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SRC = "https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js", libP = null;
+  function lib() { if (window.exifr) return Promise.resolve(window.exifr); if (libP) return libP; libP = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = SRC; s.onload = function () { res(window.exifr); }; s.onerror = function () { libP = null; rej(new Error('Échec du chargement de exifr.')); }; document.head.appendChild(s); }); return libP; }
+  function toast(m, w) { $('toast').className = 'toast show' + (w ? ' warn' : ''); $('toast').innerHTML = m; }
+  function hideToast() { $('toast').className = 'toast'; }
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  var curFile = null, curType = 'image/png', curName = 'image';
+
+  var LABELS = { Make: 'Appareil', Model: 'Modèle', LensModel: 'Objectif', DateTimeOriginal: 'Date de prise', ISO: 'ISO', FNumber: 'Ouverture', ExposureTime: 'Vitesse', FocalLength: 'Focale', Software: 'Logiciel', Orientation: 'Orientation', ImageWidth: 'Largeur', ImageHeight: 'Hauteur' };
+  function fmt(k, v) {
+    if (v instanceof Date) return v.toLocaleString('fr');
+    if (k === 'FNumber') return 'f/' + v;
+    if (k === 'ExposureTime') return v < 1 ? '1/' + Math.round(1 / v) + ' s' : v + ' s';
+    if (k === 'FocalLength') return v + ' mm';
+    return v;
+  }
+
+  function show(file) {
+    if (!file.type.startsWith('image/')) { toast('<span class="lead">Erreur</span> ce fichier n\'est pas une image.', true); return; }
+    curFile = file; curType = file.type === 'image/jpeg' ? 'image/jpeg' : (file.type === 'image/webp' ? 'image/webp' : 'image/png'); curName = file.name.replace(/\.[^.]+$/, '');
+    $('preview').src = URL.createObjectURL(file); $('drop').hidden = true; $('panel').hidden = false;
+    toast('<span class="lead">Lecture</span> des métadonnées…');
+    lib().then(function (exifr) { return Promise.all([exifr.parse(file, true).catch(function () { return null; }), exifr.gps(file).catch(function () { return null; })]); })
+      .then(function (r) { render(r[0], r[1]); hideToast(); })
+      .catch(function (e) { toast('<span class="lead">Erreur</span> ' + e.message, true); });
+  }
+
+  function render(tags, gps) {
+    var html = '', shown = 0;
+    Object.keys(LABELS).forEach(function (k) { if (tags && tags[k] != null && tags[k] !== '') { html += row(LABELS[k], fmt(k, tags[k])); shown++; } });
+    if (gps && gps.latitude != null) { html += row('GPS', gps.latitude.toFixed(5) + ', ' + gps.longitude.toFixed(5)); shown++; }
+    if (!shown) { $('meta').innerHTML = '<div class="none">Aucune métadonnée EXIF trouvée (image déjà propre, PNG, ou capture d\'écran).</div>'; return; }
+    // toutes les métadonnées
+    var all = '';
+    if (tags) Object.keys(tags).sort().forEach(function (k) { var v = tags[k]; if (v != null && typeof v !== 'object') all += row(k, v instanceof Date ? v.toLocaleString('fr') : esc(v)); else if (v instanceof Date) all += row(k, v.toLocaleString('fr')); });
+    $('meta').innerHTML = html + '<details><summary>Toutes les métadonnées (' + (tags ? Object.keys(tags).length : 0) + ')</summary>' + all + '</details>';
+  }
+  function row(k, v) { return '<div class="mrow"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'; }
+
+  $('clean').addEventListener('click', function () {
+    if (!curFile) return;
+    var img = new Image(); img.onload = function () {
+      var c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+      var ctx = c.getContext('2d'); if (curType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); } ctx.drawImage(img, 0, 0);
+      c.toBlob(function (b) { var ext = curType === 'image/jpeg' ? 'jpg' : curType === 'image/webp' ? 'webp' : 'png'; var u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = curName + '-sans-metadonnees.' + ext; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1500); }, curType, 0.95);
+    }; img.src = URL.createObjectURL(curFile);
+  });
+  $('reset').addEventListener('click', function () { curFile = null; $('panel').hidden = true; $('drop').hidden = false; hideToast(); });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { if ($('file').files[0]) show($('file').files[0]); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) show(e.dataTransfer.files[0]); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+})();
+</script>
+</body>
+</html>

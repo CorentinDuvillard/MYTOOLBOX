@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Numéroter un PDF</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .work{display:grid;grid-template-columns:300px 1fr;gap:22px;margin-top:18px;align-items:start}
+  @media (max-width:720px){.work{grid-template-columns:1fr}}
+  .prevwrap{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;justify-content:center}
+  #preview{max-width:100%;box-shadow:var(--shadow-soft);background:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M10 16h4"/></svg></span>Numéroter un PDF</div>
+    <span class="tag">Pagination</span>
+  </header>
+  <p class="sub">Ajoutez des numéros de page à un PDF, avec position, format et style réglables. Aperçu sur la première page. Traitement local (pdf.js + pdf-lib).</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir un PDF">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+    <h2>Glissez un PDF ici</h2><p>ou cliquez pour le sélectionner</p>
+  </div>
+  <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+
+  <div id="panel" hidden>
+    <div class="work">
+      <div class="grid">
+        <div class="field"><label for="format">Format</label><select id="format"><option value="{n}">1, 2, 3…</option><option value="Page {n}">Page 1</option><option value="{n} / {total}">1 / N</option><option value="Page {n} sur {total}">Page 1 sur N</option></select></div>
+        <div class="field"><label for="pos">Position</label><select id="pos"><option value="bc">Bas — centre</option><option value="br">Bas — droite</option><option value="bl">Bas — gauche</option><option value="tc">Haut — centre</option><option value="tr">Haut — droite</option><option value="tl">Haut — gauche</option></select></div>
+        <div class="row"><div class="field" style="flex:1"><label for="start">Début à</label><input type="number" id="start" value="1" min="0"></div><div class="field" style="flex:1"><label for="size">Taille</label><input type="number" id="size" value="11" min="6" max="48"></div></div>
+        <div class="field"><label for="margin">Marge (pt)</label><input type="number" id="margin" value="28" min="6" max="120"></div>
+        <button class="btn primary" id="apply">Numéroter et télécharger</button>
+        <button class="btn ghost" id="reset">Autre PDF</button>
+        <span class="summary" id="info"></span>
+      </div>
+      <div class="prevwrap"><canvas id="preview" aria-label="Aperçu de la première page"></canvas></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SRC = { pdfjs: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", worker: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js", pdflib: "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" };
+  var loaded = {}, bytes = null, total = 0, baseImg = null, baseVp = null, fileName = 'document';
+  function load(src, glob, after) { if (window[glob]) return Promise.resolve(window[glob]); if (loaded[src]) return loaded[src]; loaded[src] = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = function () { if (after) after(); res(window[glob]); }; s.onerror = function () { loaded[src] = null; rej(new Error('Échec du chargement.')); }; document.head.appendChild(s); }); return loaded[src]; }
+  function toast(m, w) { $('toast').className = 'toast show' + (w ? ' warn' : ''); $('toast').innerHTML = m; }
+  function hideToast() { $('toast').className = 'toast'; }
+
+  function pos(code, pw, ph, margin, tw, size) {
+    var x = code[1] === 'l' ? margin : code[1] === 'r' ? pw - margin - tw : (pw - tw) / 2;
+    var y = code[0] === 't' ? ph - margin - size : margin;
+    return { x: x, y: y };
+  }
+  function sampleText() { return $('format').value.replace('{n}', $('start').value).replace('{total}', total || 1); }
+
+  function open(file) {
+    if (!file || file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { toast('<span class="lead">Erreur</span> ce fichier n\'est pas un PDF.', true); return; }
+    fileName = file.name.replace(/\.pdf$/i, ''); toast('<span class="lead">Lecture</span>…');
+    file.arrayBuffer().then(function (ab) { bytes = new Uint8Array(ab); return load(SRC.pdfjs, 'pdfjsLib', function () { window.pdfjsLib.GlobalWorkerOptions.workerSrc = SRC.worker; }); })
+      .then(function (pdfjsLib) { return pdfjsLib.getDocument({ data: bytes.slice(0) }).promise; })
+      .then(function (doc) { total = doc.numPages; return doc.getPage(1); })
+      .then(function (pg) {
+        var vp = pg.getViewport({ scale: 1 }); baseVp = vp;
+        var cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+        return pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise.then(function () { baseImg = cv; $('drop').hidden = true; $('panel').hidden = false; $('info').innerHTML = '<b>' + total + '</b> page' + (total > 1 ? 's' : ''); hideToast(); drawPreview(); });
+      }).catch(function () { toast('<span class="lead">Erreur</span> PDF illisible ou protégé.', true); });
+  }
+
+  function drawPreview() {
+    if (!baseImg) return;
+    var cv = $('preview'); cv.width = baseImg.width; cv.height = baseImg.height;
+    var ctx = cv.getContext('2d'); ctx.drawImage(baseImg, 0, 0);
+    var size = +$('size').value, margin = +$('margin').value, txt = sampleText();
+    ctx.font = '600 ' + size + 'px Helvetica, sans-serif'; ctx.fillStyle = '#111'; ctx.textBaseline = 'alphabetic';
+    var tw = ctx.measureText(txt).width;
+    var p = pos($('pos').value, cv.width, cv.height, margin, tw, size);
+    ctx.fillText(txt, p.x, cv.height - p.y); // canvas y inversé vs PDF
+  }
+
+  function apply() {
+    if (!bytes) return; toast('<span class="lead">Traitement</span> numérotation…');
+    load(SRC.pdflib, 'PDFLib').then(function (PDFLib) {
+      return PDFLib.PDFDocument.load(bytes).then(function (doc) {
+        return doc.embedFont(PDFLib.StandardFonts.Helvetica).then(function (font) {
+          var pages = doc.getPages(), size = +$('size').value, margin = +$('margin').value, start = +$('start').value, fmt = $('format').value, code = $('pos').value;
+          pages.forEach(function (pg, i) {
+            var txt = fmt.replace('{n}', start + i).replace('{total}', pages.length);
+            var sz = pg.getSize(), tw = font.widthOfTextAtSize(txt, size);
+            var p = pos(code, sz.width, sz.height, margin, tw, size);
+            pg.drawText(txt, { x: p.x, y: p.y, size: size, font: font, color: PDFLib.rgb(0.07, 0.07, 0.07) });
+          });
+          return doc.save();
+        });
+      });
+    }).then(function (u8) { hideToast(); var blob = new Blob([u8], { type: 'application/pdf' }), u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = fileName + '-numerote.pdf'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1500); })
+      .catch(function (e) { toast('<span class="lead">Erreur</span> ' + e.message, true); });
+  }
+
+  ['format', 'pos', 'start', 'size', 'margin'].forEach(function (id) { $(id).addEventListener('input', drawPreview); $(id).addEventListener('change', drawPreview); });
+  $('apply').addEventListener('click', apply);
+  $('reset').addEventListener('click', function () { bytes = null; baseImg = null; $('panel').hidden = true; $('drop').hidden = false; hideToast(); });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { if ($('file').files[0]) open($('file').files[0]); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) open(e.dataTransfer.files[0]); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+})();
+</script>
+</body>
+</html>

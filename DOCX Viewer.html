@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visualiseur DOCX</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .docview{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:32px 38px;max-width:820px;margin:0 auto;line-height:1.65}
+  .docview h1,.docview h2,.docview h3{letter-spacing:-.01em;margin:18px 0 10px}
+  .docview p{margin:8px 0;font-size:15px} .docview ul,.docview ol{padding-left:24px;margin:8px 0}
+  .docview a{color:var(--accent)} .docview table{border-collapse:collapse;margin:12px 0} .docview td,.docview th{border:1px solid var(--line);padding:6px 10px}
+  .docview img{max-width:100%}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg></span>Visualiseur DOCX</div>
+    <span class="tag">Word</span>
+  </header>
+  <p class="sub">Affichez le contenu d'un document Word (.docx) dans le navigateur (mammoth). <b>Note :</b> la mise en page n'est pas fidèle au rendu Word — texte, titres, listes et tableaux sont préservés, pas la mise en forme exacte.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir un document Word">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+    <h2>Glissez un fichier .docx</h2><p>ou cliquez pour le sélectionner</p>
+  </div>
+  <input type="file" id="file" accept=".docx" hidden>
+
+  <div id="panel" hidden>
+    <div class="row" style="margin:0 0 14px"><span class="summary" id="info"></span><button class="btn" id="copy">Copier le texte</button><button class="btn ghost" id="reset">Autre document</button></div>
+    <div class="docview" id="doc"></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SRC = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js", libP = null;
+  function lib() { if (window.mammoth) return Promise.resolve(window.mammoth); if (libP) return libP; libP = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = SRC; s.onload = function () { res(window.mammoth); }; s.onerror = function () { libP = null; rej(new Error('Échec du chargement de mammoth.')); }; document.head.appendChild(s); }); return libP; }
+  function toast(m, w) { $('toast').className = 'toast show' + (w ? ' warn' : ''); $('toast').innerHTML = m; }
+  function hideToast() { $('toast').className = 'toast'; }
+  function sanitize(html) { var d = new DOMParser().parseFromString(html, 'text/html'); d.querySelectorAll('script,style,iframe,object,embed').forEach(function (n) { n.remove(); }); d.querySelectorAll('*').forEach(function (el) { Array.prototype.slice.call(el.attributes).forEach(function (a) { if (/^on/i.test(a.name)) el.removeAttribute(a.name); }); }); return d.body.innerHTML; }
+
+  function open(file) {
+    if (!/\.docx$/i.test(file.name)) { toast('<span class="lead">Erreur</span> seuls les fichiers .docx sont pris en charge.', true); return; }
+    toast('<span class="lead">Lecture</span> conversion…');
+    file.arrayBuffer().then(function (ab) { return lib().then(function (m) { return m.convertToHtml({ arrayBuffer: ab }); }); })
+      .then(function (r) { $('doc').innerHTML = sanitize(r.value) || '<p style="color:var(--muted)">Document vide.</p>'; $('info').textContent = file.name; $('drop').hidden = true; $('panel').hidden = false; hideToast(); })
+      .catch(function (e) { toast('<span class="lead">Erreur</span> ' + (e.message || 'document illisible'), true); });
+  }
+
+  $('copy').addEventListener('click', function () { navigator.clipboard.writeText($('doc').innerText).then(function () { var b = $('copy'), o = b.textContent; b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = o; }, 1100); }); });
+  $('reset').addEventListener('click', function () { $('panel').hidden = true; $('drop').hidden = false; hideToast(); });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { if ($('file').files[0]) open($('file').files[0]); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) open(e.dataTransfer.files[0]); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+})();
+</script>
+</body>
+</html>

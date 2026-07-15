@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calcul de hash</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .res{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+  .hashrow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;background:var(--surface)}
+  .hashrow .algo{font-family:var(--font-mono);font-size:11px;color:var(--accent-hover);min-width:74px;font-weight:600}
+  .hashrow .val{font-family:var(--font-mono);font-size:12.5px;word-break:break-all;flex:1;color:var(--text)}
+  .hashrow .cp{flex:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg></span>Calcul de hash</div>
+    <span class="tag">SHA-1 · 256 · 384 · 512</span>
+  </header>
+  <p class="sub">Calculez les empreintes SHA d'un texte ou d'un fichier. Le calcul utilise l'API Web Crypto du navigateur — aucune donnée n'est transmise.</p>
+
+  <div class="field"><label for="txt">Texte</label>
+    <textarea id="txt" spellcheck="false" placeholder="Tapez ou collez du texte à hacher…" style="min-height:120px"></textarea>
+  </div>
+
+  <div class="toolbar" style="margin-top:14px">
+    <div class="row"><button class="btn" id="pick">Choisir un fichier…</button><span class="summary" id="fname">ou hachez le texte ci-dessus</span></div>
+    <input type="file" id="file" hidden>
+  </div>
+
+  <div class="res" id="res"></div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var ALGOS = ['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'];
+  var txtEl = $('txt'), resEl = $('res'), toastEl = $('toast'), fnameEl = $('fname');
+  var debounce;
+
+  function hex(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join(''); }
+
+  function render(map) {
+    resEl.innerHTML = '';
+    ALGOS.forEach(function (a) {
+      var row = document.createElement('div');
+      row.className = 'hashrow';
+      row.innerHTML = '<span class="algo">' + a + '</span><span class="val"></span><button class="btn cp">Copier</button>';
+      row.querySelector('.val').textContent = map[a] || '';
+      row.querySelector('.cp').addEventListener('click', function () {
+        navigator.clipboard.writeText(map[a] || '').then(function () { var b = row.querySelector('.cp'), o = b.textContent; b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = o; }, 1100); });
+      });
+      resEl.appendChild(row);
+    });
+  }
+
+  function digestAll(buf) {
+    return Promise.all(ALGOS.map(function (a) { return crypto.subtle.digest(a, buf).then(hex); }))
+      .then(function (vals) { var m = {}; ALGOS.forEach(function (a, i) { m[a] = vals[i]; }); return m; });
+  }
+
+  function hashText() {
+    var t = txtEl.value;
+    if (!t) { resEl.innerHTML = ''; return; }
+    digestAll(new TextEncoder().encode(t)).then(render);
+  }
+
+  txtEl.addEventListener('input', function () { fnameEl.textContent = 'ou hachez le texte ci-dessus'; clearTimeout(debounce); debounce = setTimeout(hashText, 200); });
+
+  $('pick').addEventListener('click', function () { $('file').click(); });
+  $('file').addEventListener('change', function () {
+    var f = $('file').files[0]; if (!f) return;
+    $('file').value = '';
+    fnameEl.textContent = f.name;
+    toastEl.className = 'toast show'; toastEl.innerHTML = '<span class="lead">Lecture</span> calcul en cours…';
+    f.arrayBuffer().then(digestAll).then(function (m) { render(m); toastEl.className = 'toast'; })
+      .catch(function () { toastEl.className = 'toast show warn'; toastEl.innerHTML = '<span class="lead">Erreur</span> impossible de lire le fichier.'; });
+  });
+})();
+</script>
+</body>
+</html>

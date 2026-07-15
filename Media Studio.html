@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio Audio / Vidéo</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .ops{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 18px}
+  .ops button{font-family:inherit;font-size:13px;padding:8px 14px;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;cursor:pointer}
+  .ops button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
+  .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:14px}
+  .prog{height:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:99px;overflow:hidden;margin:14px 0}
+  .prog .bar{height:100%;width:0;background:var(--accent);transition:width .2s}
+  .result{margin-top:18px;border:1px solid var(--line);border-radius:var(--radius);padding:16px;background:var(--surface)}
+  .result video,.result audio,.result img{max-width:100%;border-radius:8px}
+  .files{font-size:13px;color:var(--muted);margin-top:8px}
+  .warn-note{font-size:12.5px;color:var(--faint);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m10 8 6 4-6 4V8z"/><rect x="2" y="3" width="20" height="18" rx="3"/></svg></span>Studio Audio / Vidéo</div>
+    <span class="tag">ffmpeg.wasm</span>
+  </header>
+  <p class="sub">Découpez, convertissez, compressez vos vidéos, extrayez l'audio, créez des GIF ou fusionnez des clips — entièrement dans le navigateur via ffmpeg.wasm. Le moteur (~25 Mo) est chargé à la première utilisation. Aucun fichier n'est envoyé.</p>
+
+  <div class="ops" id="ops" role="group" aria-label="Opération"></div>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir un fichier média">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+    <h2 id="dropLabel">Glissez une vidéo ici</h2><p>ou cliquez pour la sélectionner</p>
+  </div>
+  <input type="file" id="file" accept="video/*,audio/*" hidden>
+
+  <div id="panel" hidden>
+    <div class="files" id="files"></div>
+    <div class="opts" id="opts"></div>
+    <p class="warn-note" id="opNote"></p>
+    <div class="row"><button class="btn primary" id="run">Lancer</button><button class="btn ghost" id="reset">Recommencer</button></div>
+    <div class="prog" id="progWrap" hidden><div class="bar" id="bar"></div></div>
+    <div id="result" class="result" hidden></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  // ffmpeg.wasm 0.12 — cœur MONO-THREAD (pas de SharedArrayBuffer, donc AUCUN
+  // en-tête COOP/COEP requis : zéro impact sur les autres outils).
+  var FF_URL = "https://esm.sh/@ffmpeg/ffmpeg@0.12.10";
+  var UTIL_URL = "https://esm.sh/@ffmpeg/util@0.12.1";
+  var CORE_BASE = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+  var ffmpeg = null, ffP = null, fetchFile = null, files = [], op = 'convert';
+
+  var OPS = {
+    convert: { label: 'Convertir', multi: false, accept: 'video/*,audio/*', dropLabel: 'Glissez une vidéo ou un audio',
+      opts: '<div class="field"><label for="o_fmt">Format de sortie</label><select id="o_fmt"><option value="mp4">MP4</option><option value="webm">WebM</option><option value="mp3">MP3 (audio)</option><option value="wav">WAV (audio)</option></select></div>' },
+    trim: { label: 'Couper', multi: false, accept: 'video/*,audio/*', dropLabel: 'Glissez une vidéo ou un audio',
+      opts: '<div class="field"><label for="o_start">Début (s)</label><input type="number" id="o_start" value="0" min="0" step="0.1"></div><div class="field"><label for="o_end">Fin (s)</label><input type="number" id="o_end" value="5" min="0" step="0.1"></div>' },
+    audio: { label: "Extraire l'audio", multi: false, accept: 'video/*', dropLabel: 'Glissez une vidéo',
+      opts: '<div class="field"><label for="o_afmt">Format audio</label><select id="o_afmt"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="m4a">M4A</option></select></div>' },
+    gif: { label: 'Vidéo → GIF', multi: false, accept: 'video/*', dropLabel: 'Glissez une vidéo',
+      opts: '<div class="field"><label for="o_fps">Images/s</label><input type="number" id="o_fps" value="10" min="2" max="30"></div><div class="field"><label for="o_w">Largeur (px)</label><input type="number" id="o_w" value="320" min="80" max="1024"></div>' },
+    compress: { label: 'Compresser', multi: false, accept: 'video/*', dropLabel: 'Glissez une vidéo',
+      opts: '<div class="field"><label for="o_crf">Qualité (CRF) — <span id="crfv" class="mono">28</span></label><input type="range" id="o_crf" min="18" max="40" value="28"><div class="warn-note">Plus élevé = plus compressé</div></div>' },
+    merge: { label: 'Fusionner', multi: true, accept: 'video/*', dropLabel: 'Glissez plusieurs vidéos',
+      opts: '', note: 'La fusion fonctionne mieux avec des clips de même format, codec et résolution.' }
+  };
+
+  function toast(m, w) { $('toast').className = 'toast show' + (w ? ' warn' : ''); $('toast').innerHTML = m; }
+  function hideToast() { $('toast').className = 'toast'; }
+  function ext(name) { var m = /\.([^.]+)$/.exec(name); return m ? m[1].toLowerCase() : 'bin'; }
+
+  function ensureFFmpeg() {
+    if (ffmpeg && ffmpeg.loaded) return Promise.resolve(ffmpeg);
+    if (ffP) return ffP;
+    toast('<span class="lead">Préparation</span> chargement du moteur (~30 Mo, une seule fois)…');
+    ffP = Promise.all([import(FF_URL), import(UTIL_URL)]).then(function (mods) {
+      var FFmpeg = mods[0].FFmpeg, toBlobURL = mods[1].toBlobURL; fetchFile = mods[1].fetchFile;
+      ffmpeg = new FFmpeg();
+      ffmpeg.on('progress', function (p) { if (p && p.progress >= 0) $('bar').style.width = Math.min(100, Math.round(p.progress * 100)) + '%'; });
+      return Promise.all([toBlobURL(CORE_BASE + '/ffmpeg-core.js', 'text/javascript'), toBlobURL(CORE_BASE + '/ffmpeg-core.wasm', 'application/wasm')])
+        .then(function (u) { return ffmpeg.load({ coreURL: u[0], wasmURL: u[1] }); });
+    }).then(function () { hideToast(); return ffmpeg; }).catch(function (e) { ffP = null; throw new Error('Échec du chargement de ffmpeg.wasm.'); });
+    return ffP;
+  }
+
+  function buildOps() {
+    var html = ''; Object.keys(OPS).forEach(function (k) { html += '<button data-op="' + k + '" aria-pressed="' + (k === op) + '">' + OPS[k].label + '</button>'; });
+    $('ops').innerHTML = html;
+    Array.prototype.forEach.call($('ops').children, function (b) { b.addEventListener('click', function () { setOp(b.dataset.op); }); });
+  }
+  function setOp(k) {
+    op = k; Array.prototype.forEach.call($('ops').children, function (x) { x.setAttribute('aria-pressed', x.dataset.op === k ? 'true' : 'false'); });
+    $('file').multiple = OPS[k].multi; $('file').accept = OPS[k].accept; $('dropLabel').textContent = OPS[k].dropLabel;
+    $('opts').innerHTML = OPS[k].opts; $('opNote').textContent = OPS[k].note || '';
+    var crf = $('o_crf'); if (crf) crf.addEventListener('input', function () { $('crfv').textContent = crf.value; });
+    files = []; $('panel').hidden = true; $('drop').hidden = false; $('result').hidden = true;
+  }
+
+  function addFiles(list) {
+    var arr = Array.prototype.slice.call(list).filter(function (f) { return f.type.startsWith('video/') || f.type.startsWith('audio/'); });
+    if (!arr.length) return;
+    files = OPS[op].multi ? files.concat(arr) : [arr[0]];
+    $('drop').hidden = true; $('panel').hidden = false; $('result').hidden = true;
+    $('files').textContent = files.map(function (f) { return f.name; }).join(', ');
+  }
+
+  function argsFor(inName) {
+    var o = inName, outName, args;
+    if (op === 'convert') { var f = $('o_fmt').value; outName = 'out.' + f; args = f === 'mp3' || f === 'wav' ? ['-i', o, '-vn', outName] : ['-i', o, outName]; }
+    else if (op === 'trim') { var s = $('o_start').value, e = $('o_end').value; outName = 'out.' + ext(inName); args = ['-ss', String(s), '-to', String(e), '-i', o, outName]; }
+    else if (op === 'audio') { var af = $('o_afmt').value; outName = 'out.' + af; args = ['-i', o, '-vn', outName]; }
+    else if (op === 'gif') { outName = 'out.gif'; args = ['-i', o, '-vf', 'fps=' + ($('o_fps').value) + ',scale=' + ($('o_w').value) + ':-1:flags=lanczos', outName]; }
+    else if (op === 'compress') { outName = 'out.mp4'; args = ['-i', o, '-vcodec', 'libx264', '-crf', $('o_crf').value, '-preset', 'veryfast', outName]; }
+    return { args: args, out: outName };
+  }
+
+  function mime(name) { var e = ext(name); return { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4' }[e] || 'application/octet-stream'; }
+
+  function run() {
+    if (!files.length) { toast('<span class="lead">Aucun fichier</span> ajoutez un média.', true); return; }
+    $('run').disabled = true; $('progWrap').hidden = false; $('bar').style.width = '0%'; $('result').hidden = true;
+    ensureFFmpeg().then(function (ff) { return run2(ff); })
+      .catch(function (e) { toast('<span class="lead">Erreur</span> ' + e.message, true); })
+      .finally(function () { $('run').disabled = false; });
+  }
+
+  function run2(ff) {
+    toast('<span class="lead">Traitement</span> en cours…');
+    var chain = Promise.resolve(), inputs = [];
+    files.forEach(function (f, i) { var nm = 'in' + i + '.' + ext(f.name); inputs.push(nm); chain = chain.then(function () { return fetchFile(f); }).then(function (d) { return ff.writeFile(nm, d); }); });
+    return chain.then(function () {
+      if (op === 'merge') {
+        var list = inputs.map(function (n) { return "file '" + n + "'"; }).join('\n');
+        return ff.writeFile('list.txt', new TextEncoder().encode(list)).then(function () {
+          var out = 'out.' + ext(files[0].name);
+          return ff.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', out]).then(function () { return out; });
+        });
+      }
+      var a = argsFor(inputs[0]);
+      return ff.exec(a.args).then(function () { return a.out; });
+    }).then(function (out) {
+      return ff.readFile(out).then(function (data) {
+        var blob = new Blob([data.buffer || data], { type: mime(out) });
+        showResult(blob, out); hideToast(); $('bar').style.width = '100%';
+        inputs.concat([out]).forEach(function (n) { try { ff.deleteFile(n); } catch (e) {} });
+      });
+    });
+  }
+
+  function showResult(blob, name) {
+    var url = URL.createObjectURL(blob), e = ext(name), html;
+    if (e === 'gif') html = '<img src="' + url + '" alt="résultat">';
+    else if (['mp3', 'wav', 'm4a'].indexOf(e) >= 0) html = '<audio src="' + url + '" controls></audio>';
+    else html = '<video src="' + url + '" controls></video>';
+    $('result').hidden = false;
+    $('result').innerHTML = html + '<div class="row" style="margin-top:12px"><span class="summary mono" id="rsize"></span><a class="btn primary" download="resultat.' + e + '" href="' + url + '">Télécharger</a></div>';
+    $('rsize').textContent = (blob.size < 1048576 ? (blob.size / 1024).toFixed(0) + ' Ko' : (blob.size / 1048576).toFixed(1) + ' Mo');
+  }
+
+  $('run').addEventListener('click', run);
+  $('reset').addEventListener('click', function () { files = []; $('panel').hidden = true; $('drop').hidden = false; $('progWrap').hidden = true; hideToast(); });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { addFiles($('file').files); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+
+  buildOps(); setOp('convert');
+})();
+</script>
+</body>
+</html>

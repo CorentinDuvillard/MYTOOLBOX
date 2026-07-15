@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redimensionner une image</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .preview{margin-top:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface-2);padding:18px;display:flex;justify-content:center;align-items:center;min-height:180px}
+  .preview img{max-width:100%;max-height:340px;border-radius:6px;box-shadow:var(--shadow-soft)}
+  .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;align-items:end}
+  .lockrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .lockrow input{width:16px;height:16px;accent-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>Redimensionner</div>
+    <span class="tag">Largeur · Hauteur · %</span>
+  </header>
+  <p class="sub">Modifiez les dimensions d'une image en pixels ou en pourcentage, en conservant ou non les proportions. Aperçu instantané, traitement 100 % local.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir une image">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+    <h2>Glissez une image ici</h2><p>ou cliquez pour la sélectionner</p>
+  </div>
+  <input type="file" id="file" accept="image/*" hidden>
+
+  <div id="panel" hidden>
+    <div class="toolbar">
+      <div class="controls" style="flex:1">
+        <div class="field"><label for="w">Largeur (px)</label><input type="number" id="w" min="1" inputmode="numeric"></div>
+        <div class="field"><label for="h">Hauteur (px)</label><input type="number" id="h" min="1" inputmode="numeric"></div>
+        <div class="field"><label for="scale">Échelle (%)</label><input type="number" id="scale" min="1" max="1000" inputmode="numeric"></div>
+        <div class="lockrow"><input type="checkbox" id="lock" checked><label for="lock">Conserver les proportions</label></div>
+      </div>
+    </div>
+    <div class="row" style="margin:0 0 6px"><span class="summary" id="orig"></span><button class="btn primary" id="dl">Télécharger</button><button class="btn ghost" id="reset">Autre image</button></div>
+    <div class="preview"><img id="preview" alt="Aperçu redimensionné"></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var img = null, ow = 0, oh = 0, name = 'image', type = 'image/png', lockUpdate = false;
+
+  function load(file) {
+    if (!file || !file.type.startsWith('image/')) { $('toast').className = 'toast show warn'; $('toast').textContent = "Ce fichier n'est pas une image."; return; }
+    name = file.name.replace(/\.[^.]+$/, ''); type = file.type === 'image/jpeg' ? 'image/jpeg' : (file.type === 'image/webp' ? 'image/webp' : 'image/png');
+    var url = URL.createObjectURL(file), im = new Image();
+    im.onload = function () {
+      img = im; ow = im.naturalWidth; oh = im.naturalHeight;
+      $('w').value = ow; $('h').value = oh; $('scale').value = 100;
+      $('orig').innerHTML = 'Original : <b>' + ow + '×' + oh + '</b> px';
+      $('drop').hidden = true; $('panel').hidden = false; $('toast').className = 'toast';
+      draw();
+    };
+    im.onerror = function () { $('toast').className = 'toast show warn'; $('toast').textContent = 'Image illisible.'; };
+    im.src = url;
+  }
+
+  function draw() {
+    if (!img) return;
+    var w = Math.max(1, Math.round(+$('w').value || 1)), h = Math.max(1, Math.round(+$('h').value || 1));
+    var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    var ctx = cv.getContext('2d');
+    if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+    ctx.imageSmoothingQuality = 'high'; ctx.drawImage(img, 0, 0, w, h);
+    cv.toBlob(function (blob) { if (window._u) URL.revokeObjectURL(window._u); window._u = URL.createObjectURL(blob); $('preview').src = window._u; window._blob = blob; }, type, 0.92);
+  }
+
+  function fromW() { if (lockUpdate) return; lockUpdate = true; var w = +$('w').value; if ($('lock').checked && ow) { $('h').value = Math.round(w * oh / ow); } $('scale').value = ow ? Math.round(w / ow * 100) : 100; lockUpdate = false; draw(); }
+  function fromH() { if (lockUpdate) return; lockUpdate = true; var h = +$('h').value; if ($('lock').checked && oh) { $('w').value = Math.round(h * ow / oh); } $('scale').value = oh ? Math.round(h / oh * 100) : 100; lockUpdate = false; draw(); }
+  function fromScale() { if (lockUpdate) return; lockUpdate = true; var s = (+$('scale').value || 100) / 100; $('w').value = Math.max(1, Math.round(ow * s)); $('h').value = Math.max(1, Math.round(oh * s)); lockUpdate = false; draw(); }
+
+  $('w').addEventListener('input', fromW);
+  $('h').addEventListener('input', fromH);
+  $('scale').addEventListener('input', fromScale);
+  $('lock').addEventListener('change', fromW);
+  $('dl').addEventListener('click', function () { if (!window._blob) return; var ext = type === 'image/jpeg' ? 'jpg' : type === 'image/webp' ? 'webp' : 'png'; var a = document.createElement('a'); a.href = window._u; a.download = name + '-' + $('w').value + 'x' + $('h').value + '.' + ext; document.body.appendChild(a); a.click(); a.remove(); });
+  $('reset').addEventListener('click', function () { img = null; $('panel').hidden = true; $('drop').hidden = false; });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { if ($('file').files[0]) load($('file').files[0]); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+  window.addEventListener('dragover', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if ($('drop').hidden || !$('drop').contains(e.target)) e.preventDefault(); });
+})();
+</script>
+</body>
+</html>

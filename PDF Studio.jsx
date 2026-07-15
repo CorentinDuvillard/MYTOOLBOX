@@ -68,38 +68,45 @@ const I = {
   file: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
 };
 
+// ─── Palette (centralisée via theme.css — modifiable en un seul endroit) ───
+const C = {
+  bg:"var(--bg)", surface:"var(--surface)", surface2:"var(--surface-2)", surface3:"var(--surface-3)",
+  line:"var(--line)", text:"var(--text)", muted:"var(--muted)", faint:"var(--faint)",
+  accent:"var(--accent)", accentSoft:"var(--accent-soft)", onAccent:"var(--on-accent)",
+};
+
 // ─── Styles CSS-in-JS ───
 const S = {
-  app: { display:"flex", flexDirection:"column", height:"100vh", width:"100vw", background:"#101116", color:"#e0e2e8", fontFamily:"'Segoe UI','Helvetica Neue',sans-serif", overflow:"hidden", fontSize:13 },
-  topbar: { display:"flex", alignItems:"center", justifyContent:"space-between", height:46, padding:"0 14px", background:"#16181f", borderBottom:"1px solid #24272f", flexShrink:0, zIndex:50 },
+  app: { display:"flex", flexDirection:"column", height:"100vh", width:"100vw", background:C.bg, color:C.text, fontFamily:"var(--font)", overflow:"hidden", fontSize:13 },
+  topbar: { display:"flex", alignItems:"center", justifyContent:"space-between", height:46, padding:"0 14px", background:C.surface2, borderBottom:"1px solid "+C.line, flexShrink:0, zIndex:50 },
   brand: { display:"flex", alignItems:"center", gap:8, fontWeight:700, fontSize:15, letterSpacing:"-0.3px" },
   topActions: { display:"flex", gap:6, alignItems:"center" },
-  btn: { display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #2e313a", background:"#1e2028", color:"#d0d3da", fontSize:12, fontWeight:500, cursor:"pointer", transition:"all .12s", whiteSpace:"nowrap", fontFamily:"inherit" },
-  btnPrimary: { background:"#4d7ee8", borderColor:"#4d7ee8", color:"#fff", fontWeight:600 },
+  btn: { display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid "+C.line, background:C.surface, color:C.text, fontSize:12, fontWeight:500, cursor:"pointer", transition:"all .12s", whiteSpace:"nowrap", fontFamily:"inherit" },
+  btnPrimary: { background:C.accent, borderColor:C.accent, color:C.onAccent, fontWeight:600 },
   body: { display:"flex", flex:1, overflow:"hidden" },
-  toolbar: { width:48, flexShrink:0, background:"#16181f", borderRight:"1px solid #24272f", display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0", gap:2, overflowY:"auto" },
-  toolBtn: (active) => ({ width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:6, cursor:"pointer", color: active ? "#6b9ef7" : "#8a8f9e", background: active ? "rgba(77,126,232,.12)" : "transparent", border:"none", transition:"all .1s", fontFamily:"inherit" }),
-  toolSep: { width:24, height:1, background:"#24272f", margin:"4px 0" },
-  canvasArea: { flex:1, display:"flex", flexDirection:"column", background:"#1a1d24", overflow:"hidden", position:"relative" },
-  pageNav: { display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"7px 0", background:"rgba(0,0,0,.2)", borderBottom:"1px solid rgba(255,255,255,.04)", flexShrink:0 },
-  navBtn: (disabled) => ({ width:28, height:26, display:"flex", alignItems:"center", justifyContent:"center", background:"#1e2028", border:"1px solid #2e313a", borderRadius:5, color: disabled ? "#3a3d48" : "#c0c3ca", cursor: disabled ? "default" : "pointer", opacity: disabled ? .5 : 1 }),
+  toolbar: { width:48, flexShrink:0, background:C.surface2, borderRight:"1px solid "+C.line, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0", gap:2, overflowY:"auto" },
+  toolBtn: (active) => ({ width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:6, cursor:"pointer", color: active ? C.accent : C.muted, background: active ? C.accentSoft : "transparent", border:"none", transition:"all .1s", fontFamily:"inherit" }),
+  toolSep: { width:24, height:1, background:C.line, margin:"4px 0" },
+  canvasArea: { flex:1, display:"flex", flexDirection:"column", background:C.surface2, overflow:"hidden", position:"relative" },
+  pageNav: { display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"7px 0", background:C.surface3, borderBottom:"1px solid "+C.line, flexShrink:0 },
+  navBtn: (disabled) => ({ width:28, height:26, display:"flex", alignItems:"center", justifyContent:"center", background:C.surface, border:"1px solid "+C.line, borderRadius:5, color: disabled ? C.faint : C.text, cursor: disabled ? "default" : "pointer", opacity: disabled ? .5 : 1 }),
   canvasScroll: { flex:1, overflow:"auto", display:"flex", alignItems:"flex-start", justifyContent:"center", padding:24 },
-  canvasWrap: { position:"relative", boxShadow:"0 4px 24px rgba(0,0,0,.4)", background:"#fff" },
-  panel: { width:240, flexShrink:0, background:"#16181f", borderLeft:"1px solid #24272f", overflowY:"auto", fontSize:12 },
-  section: { padding:"12px 14px", borderBottom:"1px solid #24272f" },
-  sectionTitle: { fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".7px", color:"#5a5f6e", marginBottom:8 },
+  canvasWrap: { position:"relative", boxShadow:"0 4px 24px rgba(20,20,20,.16)", background:"#fff" },
+  panel: { width:240, flexShrink:0, background:C.surface2, borderLeft:"1px solid "+C.line, overflowY:"auto", fontSize:12 },
+  section: { padding:"12px 14px", borderBottom:"1px solid "+C.line },
+  sectionTitle: { fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".7px", color:C.faint, marginBottom:8 },
   propRow: { display:"flex", alignItems:"center", gap:6, marginBottom:6 },
-  propLabel: { fontSize:11, color:"#7a7f8e", minWidth:55 },
-  propInput: { flex:1, padding:"4px 7px", background:"#101116", border:"1px solid #2e313a", borderRadius:5, color:"#d0d3da", fontFamily:"monospace", fontSize:11, outline:"none" },
+  propLabel: { fontSize:11, color:C.muted, minWidth:55 },
+  propInput: { flex:1, padding:"4px 7px", background:C.bg, border:"1px solid "+C.line, borderRadius:5, color:C.text, fontFamily:"var(--font-mono)", fontSize:11, outline:"none" },
   welcome: { flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, textAlign:"center" },
-  dropzone: { border:"2px dashed #2e313a", borderRadius:12, padding:"50px 60px", cursor:"pointer", transition:"all .2s", textAlign:"center" },
-  statusbar: { height:28, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 14px", background:"#16181f", borderTop:"1px solid #24272f", fontSize:11, color:"#4a4f5e", flexShrink:0 },
-  modal: { position:"fixed", inset:0, background:"rgba(0,0,0,.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500 },
-  modalBox: { background:"#1a1d24", border:"1px solid #2e313a", borderRadius:12, width:460, maxHeight:"75vh", display:"flex", flexDirection:"column", boxShadow:"0 8px 40px rgba(0,0,0,.5)" },
-  modalHead: { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 18px", borderBottom:"1px solid #24272f" },
+  dropzone: { border:"2px dashed "+C.line, borderRadius:12, padding:"50px 60px", cursor:"pointer", transition:"all .2s", textAlign:"center" },
+  statusbar: { height:28, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 14px", background:C.surface2, borderTop:"1px solid "+C.line, fontSize:11, color:C.faint, flexShrink:0 },
+  modal: { position:"fixed", inset:0, background:"rgba(20,20,20,.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500 },
+  modalBox: { background:C.surface, border:"1px solid "+C.line, borderRadius:12, width:460, maxHeight:"75vh", display:"flex", flexDirection:"column", boxShadow:"0 8px 40px rgba(20,20,20,.22)" },
+  modalHead: { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 18px", borderBottom:"1px solid "+C.line },
   modalBody: { padding:18, overflowY:"auto", flex:1 },
-  modalFoot: { display:"flex", justifyContent:"flex-end", gap:8, padding:"12px 18px", borderTop:"1px solid #24272f" },
-  mergeItem: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", marginBottom:5, background:"#1e2028", borderRadius:6, border:"1px solid #24272f" },
+  modalFoot: { display:"flex", justifyContent:"flex-end", gap:8, padding:"12px 18px", borderTop:"1px solid "+C.line },
+  mergeItem: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", marginBottom:5, background:C.surface, borderRadius:6, border:"1px solid "+C.line },
 };
 
 export default function PDFStudio() {
@@ -108,7 +115,6 @@ export default function PDFStudio() {
 
   // PDF state
   const [pdfDoc, setPdfDoc] = useState(null);
-  const [pdfBytes, setPdfBytes] = useState(null);
   const [fileName, setFileName] = useState("");
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -118,7 +124,7 @@ export default function PDFStudio() {
   const [tool, setToolState] = useState("select");
   const [strokeColor, setStrokeColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(2);
-  const [fillColor, setFillColor] = useState("#4d7ee8");
+  const [fillColor, setFillColor] = useState("#e10b0b");
   const [fillOpacity, setFillOpacity] = useState(20);
   const [fontFamily, setFontFamily] = useState("Helvetica");
   const [fontSize, setFontSize] = useState(18);
@@ -145,7 +151,6 @@ export default function PDFStudio() {
   const zoomRef = useRef(1);
   const fileInputRef = useRef(null);
   const mergeInputRef = useRef(null);
-  const pdfDocRef = useRef(null);
   const pdfBytesRef = useRef(null);
 
   // Keep refs in sync
@@ -364,9 +369,8 @@ export default function PDFStudio() {
     try {
       const bytes = await file.arrayBuffer();
       const doc = await window.pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
-      pdfDocRef.current = doc;
       pdfBytesRef.current = new Uint8Array(bytes);
-      setPdfDoc(doc); setPdfBytes(new Uint8Array(bytes));
+      setPdfDoc(doc);
       setFileName(file.name); setTotalPages(doc.numPages);
       pageObjRef.current = {}; pageBgRef.current = {}; pageDimRef.current = {};
       for (let i = 1; i <= doc.numPages; i++) await renderPage(doc, i);
@@ -418,7 +422,7 @@ export default function PDFStudio() {
   }, []);
   const sendBck = useCallback(() => {
     const fc = fabricRef.current; const o = fc?.getActiveObject();
-    if (o && !o._bg && fc.getObjects().indexOf(o) > 1) { fc.sendBackwards(o); fc.renderAll(); }
+    if (o && !o._bg && fc.getObjects().indexOf(o) > 0) { fc.sendBackwards(o); fc.renderAll(); }
   }, []);
 
   // Keyboard
@@ -536,10 +540,10 @@ export default function PDFStudio() {
   // ─── Loading screen ───
   if (!ready) return (
     <div style={{...S.app, alignItems:"center", justifyContent:"center"}}>
-      {loadErr ? <div style={{color:"#e05555"}}>{loadErr}</div> :
+      {loadErr ? <div style={{color:"var(--accent)"}}>{loadErr}</div> :
         <div style={{display:"flex", flexDirection:"column", alignItems:"center", gap:12}}>
-          <div style={{width:32,height:32,border:"3px solid #2e313a",borderTop:"3px solid #4d7ee8",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
-          <span style={{color:"#7a7f8e",fontSize:13}}>Chargement des composants…</span>
+          <div style={{width:32,height:32,border:"3px solid var(--line)",borderTop:"3px solid var(--accent)",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+          <span style={{color:"var(--muted)",fontSize:13}}>Chargement des composants…</span>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
       }
@@ -565,7 +569,7 @@ export default function PDFStudio() {
   return (
     <div style={S.app}>
       {/* Loading bar */}
-      {loading && <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"#4d7ee8",zIndex:999,animation:"loadbar 1.5s ease infinite"}}>
+      {loading && <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"var(--accent)",zIndex:999,animation:"loadbar 1.5s ease infinite"}}>
         <style>{`@keyframes loadbar{0%{transform:scaleX(0);transform-origin:left}50%{transform:scaleX(.7)}100%{transform:scaleX(1);opacity:0}}`}</style>
       </div>}
 
@@ -600,24 +604,24 @@ export default function PDFStudio() {
             <div style={S.welcome}>
               <div style={{opacity:.5}}>{I.file}</div>
               <h2 style={{fontSize:20,fontWeight:700,letterSpacing:"-.3px"}}>PDF Studio</h2>
-              <p style={{fontSize:13,color:"#7a7f8e",maxWidth:340}}>Importez un PDF pour commencer l'édition, ou fusionnez plusieurs documents.</p>
+              <p style={{fontSize:13,color:"var(--muted)",maxWidth:340}}>Importez un PDF pour commencer l'édition, ou fusionnez plusieurs documents.</p>
               <div style={S.dropzone} onClick={() => fileInputRef.current?.click()}
-                onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor="#4d7ee8"; }}
-                onDragLeave={e => { e.currentTarget.style.borderColor="#2e313a"; }}
-                onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor="#2e313a"; const f=e.dataTransfer.files[0]; if(f?.type==="application/pdf") loadPDF(f); }}>
+                onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor="var(--accent)"; }}
+                onDragLeave={e => { e.currentTarget.style.borderColor="var(--line)"; }}
+                onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor="var(--line)"; const f=e.dataTransfer.files[0]; if(f?.type==="application/pdf") loadPDF(f); }}>
                 <div style={{marginBottom:8,opacity:.5}}>{I.upload}</div>
-                <div style={{color:"#8a8f9e",fontSize:13}}>Glissez un PDF ici ou cliquez</div>
+                <div style={{color:"var(--muted)",fontSize:13}}>Glissez un PDF ici ou cliquez</div>
               </div>
             </div>
           ) : (
             <>
               <div style={S.pageNav}>
                 <button style={S.navBtn(currentPage<=1)} onClick={() => goPage(currentPage-1)} disabled={currentPage<=1}>{I.chevL}</button>
-                <span style={{fontSize:12,color:"#8a8f9e",minWidth:60,textAlign:"center"}}>{currentPage} / {totalPages}</span>
+                <span style={{fontSize:12,color:"var(--muted)",minWidth:60,textAlign:"center"}}>{currentPage} / {totalPages}</span>
                 <button style={S.navBtn(currentPage>=totalPages)} onClick={() => goPage(currentPage+1)} disabled={currentPage>=totalPages}>{I.chevR}</button>
-                <div style={{width:1,height:16,background:"#24272f",margin:"0 6px"}}/>
+                <div style={{width:1,height:16,background:"var(--line)",margin:"0 6px"}}/>
                 <button style={{...S.toolBtn(false),width:28,height:28}} onClick={() => doZoom(zoom-.25)}>{I.zoomOut}</button>
-                <span style={{fontSize:11,color:"#7a7f8e",fontFamily:"monospace",minWidth:40,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
+                <span style={{fontSize:11,color:"var(--muted)",fontFamily:"monospace",minWidth:40,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
                 <button style={{...S.toolBtn(false),width:28,height:28}} onClick={() => doZoom(zoom+.25)}>{I.zoomIn}</button>
                 <button style={{...S.toolBtn(false),width:28,height:28}} onClick={zoomFit}>{I.fit}</button>
               </div>
@@ -637,7 +641,7 @@ export default function PDFStudio() {
             <div style={{fontWeight:600,fontSize:13,marginBottom:2}}>
               {{ select:"Sélection", text:"Texte", rect:"Rectangle", ellipse:"Ellipse", line:"Ligne", arrow:"Flèche", pencil:"Crayon", eraser:"Gomme" }[tool] || tool}
             </div>
-            <div style={{color:"#5a5f6e",fontSize:11}}>
+            <div style={{color:"var(--faint)",fontSize:11}}>
               {{ select:"Cliquer pour sélectionner", text:"Cliquer pour ajouter du texte", rect:"Glisser pour dessiner", ellipse:"Glisser pour dessiner", line:"Glisser pour tracer", arrow:"Glisser pour tracer", pencil:"Dessiner à main levée", eraser:"Cliquer pour effacer" }[tool]}
             </div>
           </div>
@@ -648,12 +652,12 @@ export default function PDFStudio() {
               <div style={S.sectionTitle}>Contour</div>
               <div style={S.propRow}>
                 <span style={S.propLabel}>Couleur</span>
-                <input type="color" value={strokeColor} onChange={e => { setStrokeColor(e.target.value); }} style={{width:36,height:26,border:"1px solid #2e313a",borderRadius:4,cursor:"pointer",background:"transparent"}}/>
+                <input type="color" value={strokeColor} onChange={e => { setStrokeColor(e.target.value); }} style={{width:36,height:26,border:"1px solid var(--line)",borderRadius:4,cursor:"pointer",background:"transparent"}}/>
               </div>
               <div style={S.propRow}>
                 <span style={S.propLabel}>Épaisseur</span>
-                <input type="range" min="1" max="20" value={strokeWidth} onChange={e => setStrokeWidth(+e.target.value)} style={{flex:1,accentColor:"#4d7ee8"}}/>
-                <span style={{fontSize:11,color:"#7a7f8e",minWidth:18,textAlign:"right"}}>{strokeWidth}</span>
+                <input type="range" min="1" max="20" value={strokeWidth} onChange={e => setStrokeWidth(+e.target.value)} style={{flex:1,accentColor:"var(--accent)"}}/>
+                <span style={{fontSize:11,color:"var(--muted)",minWidth:18,textAlign:"right"}}>{strokeWidth}</span>
               </div>
             </div>
           )}
@@ -664,12 +668,12 @@ export default function PDFStudio() {
               <div style={S.sectionTitle}>Remplissage</div>
               <div style={S.propRow}>
                 <span style={S.propLabel}>Couleur</span>
-                <input type="color" value={fillColor} onChange={e => setFillColor(e.target.value)} style={{width:36,height:26,border:"1px solid #2e313a",borderRadius:4,cursor:"pointer",background:"transparent"}}/>
+                <input type="color" value={fillColor} onChange={e => setFillColor(e.target.value)} style={{width:36,height:26,border:"1px solid var(--line)",borderRadius:4,cursor:"pointer",background:"transparent"}}/>
               </div>
               <div style={S.propRow}>
                 <span style={S.propLabel}>Opacité</span>
-                <input type="range" min="0" max="100" value={fillOpacity} onChange={e => setFillOpacity(+e.target.value)} style={{flex:1,accentColor:"#4d7ee8"}}/>
-                <span style={{fontSize:11,color:"#7a7f8e",minWidth:24,textAlign:"right"}}>{fillOpacity}%</span>
+                <input type="range" min="0" max="100" value={fillOpacity} onChange={e => setFillOpacity(+e.target.value)} style={{flex:1,accentColor:"var(--accent)"}}/>
+                <span style={{fontSize:11,color:"var(--muted)",minWidth:24,textAlign:"right"}}>{fillOpacity}%</span>
               </div>
             </div>
           )}
@@ -690,7 +694,7 @@ export default function PDFStudio() {
               </div>
               <div style={S.propRow}>
                 <span style={S.propLabel}>Couleur</span>
-                <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} style={{width:36,height:26,border:"1px solid #2e313a",borderRadius:4,cursor:"pointer",background:"transparent"}}/>
+                <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} style={{width:36,height:26,border:"1px solid var(--line)",borderRadius:4,cursor:"pointer",background:"transparent"}}/>
               </div>
             </div>
           )}
@@ -699,12 +703,12 @@ export default function PDFStudio() {
           {selObj && (
             <div style={S.section}>
               <div style={S.sectionTitle}>Sélection</div>
-              <div style={{fontSize:11,color:"#7a7f8e",marginBottom:6}}>x: {selObj.left}, y: {selObj.top}</div>
+              <div style={{fontSize:11,color:"var(--muted)",marginBottom:6}}>x: {selObj.left}, y: {selObj.top}</div>
               <div style={S.propRow}>
-                <button style={{...S.btn, flex:1, justifyContent:"center", borderColor:"#e05555", color:"#e05555"}} onClick={applyToSel}>Appliquer styles</button>
+                <button style={{...S.btn, flex:1, justifyContent:"center", borderColor:"var(--accent)", color:"var(--accent)"}} onClick={applyToSel}>Appliquer styles</button>
               </div>
               <div style={S.propRow}>
-                <button style={{...S.btn, flex:1, justifyContent:"center", borderColor:"#e05555", color:"#e05555"}} onClick={deleteSelected}>Supprimer</button>
+                <button style={{...S.btn, flex:1, justifyContent:"center", borderColor:"var(--accent)", color:"var(--accent)"}} onClick={deleteSelected}>Supprimer</button>
               </div>
             </div>
           )}
@@ -723,22 +727,22 @@ export default function PDFStudio() {
           <div style={S.modalBox} onClick={e => e.stopPropagation()}>
             <div style={S.modalHead}>
               <h3 style={{fontSize:15,fontWeight:600}}>Fusionner des PDF</h3>
-              <button style={{background:"transparent",border:"none",color:"#8a8f9e",cursor:"pointer"}} onClick={() => setShowMerge(false)}>{I.close}</button>
+              <button style={{background:"transparent",border:"none",color:"var(--muted)",cursor:"pointer"}} onClick={() => setShowMerge(false)}>{I.close}</button>
             </div>
             <div style={S.modalBody}>
-              <p style={{fontSize:12,color:"#7a7f8e",marginBottom:12}}>Ajoutez des fichiers et réorganisez l'ordre.</p>
+              <p style={{fontSize:12,color:"var(--muted)",marginBottom:12}}>Ajoutez des fichiers et réorganisez l'ordre.</p>
               <button style={{...S.btn,width:"100%",justifyContent:"center",marginBottom:12}} onClick={() => mergeInputRef.current?.click()}>+ Ajouter des fichiers</button>
-              {mergeFiles.length === 0 && <div style={{textAlign:"center",padding:24,color:"#4a4f5e",fontSize:12}}>Aucun fichier</div>}
+              {mergeFiles.length === 0 && <div style={{textAlign:"center",padding:24,color:"var(--faint)",fontSize:12}}>Aucun fichier</div>}
               {mergeFiles.map((f, i) => (
                 <div key={i} style={S.mergeItem}>
                   <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                    <button style={{background:"transparent",border:"none",color:i===0?"#3a3d48":"#7a7f8e",cursor:"pointer",fontSize:11}} onClick={() => { if(i>0){ const a=[...mergeFiles];[a[i-1],a[i]]=[a[i],a[i-1]];setMergeFiles(a);} }}>▲</button>
-                    <button style={{background:"transparent",border:"none",color:i===mergeFiles.length-1?"#3a3d48":"#7a7f8e",cursor:"pointer",fontSize:11}} onClick={() => { if(i<mergeFiles.length-1){ const a=[...mergeFiles];[a[i],a[i+1]]=[a[i+1],a[i]];setMergeFiles(a);} }}>▼</button>
+                    <button style={{background:"transparent",border:"none",color:i===0?"var(--faint)":"var(--muted)",cursor:"pointer",fontSize:11}} onClick={() => { if(i>0){ const a=[...mergeFiles];[a[i-1],a[i]]=[a[i],a[i-1]];setMergeFiles(a);} }}>▲</button>
+                    <button style={{background:"transparent",border:"none",color:i===mergeFiles.length-1?"var(--faint)":"var(--muted)",cursor:"pointer",fontSize:11}} onClick={() => { if(i<mergeFiles.length-1){ const a=[...mergeFiles];[a[i],a[i+1]]=[a[i+1],a[i]];setMergeFiles(a);} }}>▼</button>
                   </div>
                   {I.file}
                   <span style={{flex:1,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</span>
-                  <span style={{fontSize:10,color:"#5a5f6e"}}>{f.numPages} p.</span>
-                  <button style={{background:"transparent",border:"none",color:"#e05555",cursor:"pointer",fontSize:14}} onClick={() => setMergeFiles(mergeFiles.filter((_,j) => j!==i))}>✕</button>
+                  <span style={{fontSize:10,color:"var(--faint)"}}>{f.numPages} p.</span>
+                  <button style={{background:"transparent",border:"none",color:"var(--accent)",cursor:"pointer",fontSize:14}} onClick={() => setMergeFiles(mergeFiles.filter((_,j) => j!==i))}>✕</button>
                 </div>
               ))}
             </div>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Testeur de regex</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .patrow{display:flex;align-items:stretch;gap:0;margin-top:8px}
+  .patrow .slash{display:flex;align-items:center;padding:0 12px;background:var(--surface-2);border:1px solid var(--line);color:var(--faint);font-family:var(--font-mono)}
+  .patrow .slash.l{border-radius:var(--radius-sm) 0 0 var(--radius-sm)}
+  .patrow #pattern{border-radius:0;border-left:none;border-right:none;font-family:var(--font-mono)}
+  .patrow #flags{width:90px;border-radius:0 var(--radius-sm) var(--radius-sm) 0;border-left:none;font-family:var(--font-mono)}
+  .flags{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0;font-size:13px;color:var(--muted)}
+  .flags label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+  .flags input{accent-color:var(--accent)}
+  .hl{border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px;min-height:120px;background:var(--surface);white-space:pre-wrap;word-break:break-word;font-family:var(--font-mono);font-size:13px;line-height:1.6;margin-top:8px}
+  .hl mark{background:var(--accent-soft);color:var(--accent-hover);border-radius:3px;padding:0 1px;box-shadow:inset 0 -1px 0 var(--accent-line)}
+  .matches{margin-top:14px;font-size:13px;color:var(--muted)}
+  .matches .m{font-family:var(--font-mono);padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);margin-bottom:6px;background:var(--surface)}
+  .status{margin-top:8px;font-size:13px;color:var(--muted);min-height:20px}
+  .status.error{color:var(--accent-hover);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 4-5"/></svg></span>Testeur de regex</div>
+    <span class="tag">RegExp</span>
+  </header>
+  <p class="sub">Testez une expression régulière sur du texte : surlignage des correspondances, groupes capturés et compteur. Exécuté localement par le moteur du navigateur.</p>
+
+  <div class="field"><label for="pattern">Expression</label>
+    <div class="patrow"><span class="slash l" aria-hidden="true">/</span><input type="text" id="pattern" spellcheck="false" placeholder="\b\w+@\w+\.\w+\b" value="(\w+)@(\w+)"><span class="slash">/</span><input type="text" id="flags" spellcheck="false" value="g" aria-label="Drapeaux"></div>
+  </div>
+  <div class="flags" id="flagBoxes">
+    <label><input type="checkbox" value="g" checked> g (global)</label>
+    <label><input type="checkbox" value="i"> i (insensible)</label>
+    <label><input type="checkbox" value="m"> m (multiligne)</label>
+    <label><input type="checkbox" value="s"> s (dotall)</label>
+    <label><input type="checkbox" value="u"> u (unicode)</label>
+  </div>
+  <div class="field"><label for="text">Texte de test</label><textarea id="text" spellcheck="false">Contact : alice@example, bob@test et charlie@demo.</textarea></div>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+
+  <div class="field" style="margin-top:8px"><span class="lbl">Surlignage</span><div class="hl" id="hl"></div></div>
+  <div class="matches" id="matches"></div>
+
+  <footer class="foot"><span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span></footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+
+  function syncBoxesToText() { $('flags').value = Array.prototype.filter.call($('flagBoxes').querySelectorAll('input'), function (b) { return b.checked; }).map(function (b) { return b.value; }).join(''); }
+  function syncTextToBoxes() { var f = $('flags').value; Array.prototype.forEach.call($('flagBoxes').querySelectorAll('input'), function (b) { b.checked = f.indexOf(b.value) >= 0; }); }
+
+  function run() {
+    var pat = $('pattern').value, flags = $('flags').value, text = $('text').value;
+    if (!pat) { $('hl').textContent = text; $('matches').innerHTML = ''; $('status').textContent = ''; $('status').className = 'status'; return; }
+    var re;
+    try { re = new RegExp(pat, flags); } catch (e) { $('status').textContent = 'Regex invalide : ' + e.message; $('status').className = 'status error'; return; }
+    $('status').className = 'status';
+
+    var matches = [], out = '', last = 0, m, guard = 0;
+    var global = flags.indexOf('g') >= 0;
+    re.lastIndex = 0;
+    while ((m = re.exec(text)) !== null) {
+      matches.push(m);
+      out += esc(text.slice(last, m.index)) + '<mark>' + esc(m[0]) + '</mark>';
+      last = m.index + m[0].length;
+      if (!global) break;
+      if (m.index === re.lastIndex) re.lastIndex++; // évite boucle infinie sur match vide
+      if (++guard > 100000) break;
+    }
+    out += esc(text.slice(last));
+    $('hl').innerHTML = out || esc(text);
+    $('status').textContent = matches.length + ' correspondance' + (matches.length > 1 ? 's' : '');
+
+    var html = '';
+    matches.slice(0, 200).forEach(function (mm, i) {
+      var groups = mm.length > 1 ? ' — groupes : ' + mm.slice(1).map(function (g, j) { return (j + 1) + '=' + (g === undefined ? '∅' : JSON.stringify(g)); }).join(', ') : '';
+      html += '<div class="m">#' + (i + 1) + ' « ' + esc(mm[0]) + ' »' + esc(groups) + '</div>';
+    });
+    $('matches').innerHTML = html;
+  }
+
+  ['input', 'change'].forEach(function (ev) { $('pattern').addEventListener(ev, run); $('text').addEventListener(ev, run); });
+  $('flags').addEventListener('input', function () { syncTextToBoxes(); run(); });
+  Array.prototype.forEach.call($('flagBoxes').querySelectorAll('input'), function (b) { b.addEventListener('change', function () { syncBoxesToText(); run(); }); });
+  run();
+})();
+</script>
+</body>
+</html>

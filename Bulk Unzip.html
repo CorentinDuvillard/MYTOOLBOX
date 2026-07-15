@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Décompression en masse</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./tool.css">
+<style>
+  .badge{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+  .card.done .badge{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+  .card.fail .badge{color:var(--accent-hover);border-color:var(--accent-line);background:var(--accent-soft)}
+  /* Interrupteur de mode de sortie */
+  .mode{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .switch{position:relative;display:inline-flex;align-items:center;cursor:pointer;gap:10px}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .track{width:44px;height:24px;border-radius:99px;background:var(--surface-3);border:1px solid var(--line);transition:background .18s ease;flex:none;position:relative}
+  .track::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:var(--shadow-soft);transition:transform .18s ease}
+  .switch input:checked + .track{background:var(--accent);border-color:var(--accent)}
+  .switch input:checked + .track::after{transform:translateX(20px)}
+  .switch input:focus-visible + .track{outline:2px solid var(--accent);outline-offset:2px}
+  .mode-label{font-size:13.5px;color:var(--text);font-weight:500}
+  .mode-hint{font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tool-head">
+    <div class="tool-mark"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="M2 8v8l10 5 10-5V8M12 13v8"/></svg></span>Décompression en masse</div>
+    <span class="tag">Lot · .zip</span>
+  </header>
+  <p class="sub">Décompressez de nombreuses archives .zip d'un coup (jusqu'à 100). Choisissez la sortie : un seul .zip fusionné avec tous les fichiers, ou un téléchargement séparé de chaque fichier. Tout est traité dans votre navigateur.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des archives zip">
+    <div class="bigicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+    <h2>Glissez vos archives .zip ici</h2><p>ou cliquez pour les sélectionner (plusieurs à la fois)</p>
+    <div class="ext">formats pris en charge : .zip — jusqu'à 100 archives</div>
+  </div>
+  <input type="file" id="file" accept=".zip,application/zip,application/x-zip-compressed" multiple hidden>
+
+  <div class="toolbar" id="toolbar" hidden>
+    <div class="mode">
+      <label class="switch">
+        <input type="checkbox" id="mergeMode" checked>
+        <span class="track" aria-hidden="true"></span>
+        <span>
+          <span class="mode-label" id="modeLabel">Fusionner dans un seul .zip</span><br>
+          <span class="mode-hint" id="modeHint">tous les fichiers réunis dans une archive unique</span>
+        </span>
+      </label>
+    </div>
+    <div class="row" style="margin-left:auto;align-self:center">
+      <button class="btn primary" id="run" disabled>Traitement…</button>
+      <button class="btn ghost" id="clear">Effacer</button>
+    </div>
+  </div>
+
+  <div class="summary" id="summary" style="margin-top:14px"></div>
+  <div class="toast" id="toast" role="status"></div>
+  <div class="list" id="list"></div>
+
+  <footer class="foot">
+    <span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Traitement 100% local</span>
+    <span class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg> .rar et .7z non pris en charge</span>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var MAX_ARCHIVES = 100;
+  var archives = [];   // { id, name, size, status, files:[{path, zipEntry}], error }
+  var seq = 0, working = false;
+
+  function fmtSize(b) { if (b == null) return ''; if (b < 1024) return b + ' o'; var u = ['Ko', 'Mo', 'Go'], i = -1, n = b; do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1); return (n < 10 ? n.toFixed(1) : Math.round(n)) + ' ' + u[i]; }
+  function baseName(p) { var s = p.split('/'); return s[s.length - 1]; }
+  function toast(html, warn) { $('toast').innerHTML = html; $('toast').className = 'toast show' + (warn ? ' warn' : ''); }
+  function hideToast() { $('toast').className = 'toast'; }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  // ── Intake ──
+  function addFiles(list) {
+    var files = Array.prototype.slice.call(list);
+    if (!files.length) return;
+    hideToast();
+    var room = MAX_ARCHIVES - archives.length, over = 0;
+    files.forEach(function (f) {
+      if (archives.length >= MAX_ARCHIVES) { over++; return; }
+      var entry = { id: ++seq, name: f.name, size: f.size, status: 'working', files: [], error: null, el: null };
+      archives.push(entry);
+      renderCard(entry);
+      extract(entry, f);
+    });
+    if (over) toast('<span class="lead">Limite atteinte</span> ' + over + ' archive(s) ignorée(s) — maximum ' + MAX_ARCHIVES + '.', true);
+    refresh();
+  }
+
+  function extract(entry, file) {
+    var isZip = file.name.toLowerCase().slice(-4) === '.zip';
+    JSZip.loadAsync(file).then(function (zip) {
+      var arr = [];
+      zip.forEach(function (path, f) { if (!f.dir && !/\/$/.test(path)) arr.push({ path: path, entry: f }); });
+      entry.files = arr;
+      entry.status = arr.length ? 'done' : 'empty';
+      updateCard(entry); refresh();
+    }).catch(function () {
+      entry.status = 'fail';
+      entry.error = isZip ? 'Archive illisible ou corrompue.' : "Ce fichier n'est pas une archive .zip.";
+      updateCard(entry); refresh();
+    });
+  }
+
+  // ── Rendering ──
+  function renderCard(entry) {
+    var c = document.createElement('div'); c.className = 'card';
+    c.innerHTML = '<div class="head"><div style="flex:1;min-width:0"><div class="fname"></div><div class="fstat"></div></div><span class="badge"></span></div>';
+    c.querySelector('.fname').textContent = entry.name;
+    entry.el = c; $('list').appendChild(c); updateCard(entry);
+  }
+  function updateCard(entry) {
+    var c = entry.el; if (!c) return;
+    c.className = 'card' + (entry.status === 'done' || entry.status === 'empty' ? ' done' : entry.status === 'fail' ? ' fail' : '');
+    var s = c.querySelector('.fstat'), b = c.querySelector('.badge');
+    if (entry.status === 'done') { s.innerHTML = '<span class="mono">' + entry.files.length + ' fichier' + (entry.files.length > 1 ? 's' : '') + '</span>'; b.textContent = 'OK'; }
+    else if (entry.status === 'empty') { s.textContent = 'Archive vide'; b.textContent = 'vide'; }
+    else if (entry.status === 'fail') { s.textContent = entry.error || 'Échec'; b.textContent = 'échec'; }
+    else { s.innerHTML = '<span class="mono">' + fmtSize(entry.size) + '</span> · lecture…'; b.textContent = '…'; }
+  }
+
+  // ── State ──
+  function readyArchives() { return archives.filter(function (a) { return a.status === 'done'; }); }
+  function totalFiles() { return readyArchives().reduce(function (s, a) { return s + a.files.length; }, 0); }
+
+  function refresh() {
+    var n = archives.length;
+    $('toolbar').hidden = n === 0;
+    $('drop').querySelector('h2').textContent = n ? 'Ajouter d\'autres archives' : 'Glissez vos archives .zip ici';
+    var busy = archives.some(function (a) { return a.status === 'working'; });
+    var tf = totalFiles();
+    var txt = '<b>' + n + '</b> archive' + (n > 1 ? 's' : '');
+    if (tf) txt += ' · <b>' + tf + '</b> fichier' + (tf > 1 ? 's' : '') + ' extractible' + (tf > 1 ? 's' : '');
+    if (busy) txt += ' · lecture en cours…';
+    $('summary').innerHTML = txt;
+    updateRunButton(busy, tf);
+  }
+  function updateRunButton(busy, tf) {
+    var btn = $('run');
+    if (busy) { btn.disabled = true; btn.textContent = 'Lecture…'; return; }
+    btn.disabled = working || tf === 0;
+    btn.textContent = $('mergeMode').checked
+      ? 'Télécharger le .zip fusionné'
+      : 'Tout télécharger (' + tf + ' fichier' + (tf > 1 ? 's' : '') + ')';
+  }
+
+  // ── Collision-safe naming ──
+  function uniquer() {
+    var used = Object.create(null);
+    return function (name) {
+      if (!used[name]) { used[name] = 1; return name; }
+      var dot = name.lastIndexOf('.'), base = dot > 0 ? name.slice(0, dot) : name, ext = dot > 0 ? name.slice(dot) : '';
+      var k = used[name]++; var cand;
+      do { cand = base + '-' + k + ext; k++; } while (used[cand]);
+      used[cand] = 1; return cand;
+    };
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  // ── Mode 1 : merged single zip ──
+  function runMerged() {
+    var ready = readyArchives(); if (!ready.length) return;
+    working = true; updateRunButton(false, totalFiles());
+    $('run').textContent = 'Fusion…'; $('run').disabled = true;
+    var out = new JSZip(), uniq = uniquer(), tasks = [];
+    ready.forEach(function (a) {
+      a.files.forEach(function (f) {
+        tasks.push(f.entry.async('blob').then(function (blob) { out.file(uniq(f.path), blob); }));
+      });
+    });
+    Promise.all(tasks)
+      .then(function () { return out.generateAsync({ type: 'blob', compression: 'DEFLATE' }, function (meta) { $('run').textContent = 'Compression ' + Math.round(meta.percent) + '%'; }); })
+      .then(function (blob) { downloadBlob(blob, 'archives-fusionnees.zip'); toast('<span class="lead">Terminé</span> ' + tasks.length + ' fichier(s) réunis dans <b>archives-fusionnees.zip</b>.'); })
+      .catch(function (e) { toast('<span class="lead">Erreur</span> ' + (e && e.message ? e.message : 'fusion impossible') + '.', true); })
+      .finally(function () { working = false; refresh(); });
+  }
+
+  // ── Mode 2 : individual files (many downloads, files only) ──
+  function runIndividual() {
+    var ready = readyArchives(); if (!ready.length) return;
+    var queue = [], uniq = uniquer();
+    ready.forEach(function (a) { a.files.forEach(function (f) { queue.push({ name: uniq(baseName(f.path)), entry: f.entry }); }); });
+    if (!queue.length) return;
+    working = true; $('run').disabled = true;
+    if (queue.length > 60) toast('<span class="lead">Astuce</span> ' + queue.length + ' fichiers : votre navigateur peut demander l\'autorisation de télécharger plusieurs fichiers.', true);
+    var i = 0;
+    (function next() {
+      if (i >= queue.length) { working = false; $('run').disabled = false; toast('<span class="lead">Terminé</span> ' + queue.length + ' fichier(s) téléchargé(s) séparément.'); refresh(); return; }
+      var it = queue[i++]; $('run').textContent = 'Téléchargement ' + i + '/' + queue.length;
+      it.entry.async('blob').then(function (blob) { downloadBlob(blob, it.name); sleep(150).then(next); });
+    })();
+  }
+
+  function run() { if (working) return; if ($('mergeMode').checked) runMerged(); else runIndividual(); }
+
+  function clearAll() {
+    archives = []; $('list').innerHTML = ''; $('summary').innerHTML = ''; hideToast(); refresh();
+  }
+
+  // ── Events ──
+  $('mergeMode').addEventListener('change', function () {
+    $('modeLabel').textContent = this.checked ? 'Fusionner dans un seul .zip' : 'Télécharger chaque fichier séparément';
+    $('modeHint').textContent = this.checked ? 'tous les fichiers réunis dans une archive unique' : 'un téléchargement par fichier (fichiers seuls, sans dossier zip)';
+    refresh();
+  });
+  $('drop').addEventListener('click', function () { $('file').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', function () { addFiles($('file').files); $('file').value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.add('hot'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (ev) { $('drop').addEventListener(ev, function (e) { e.preventDefault(); $('drop').classList.remove('hot'); }); });
+  $('drop').addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+  window.addEventListener('dragover', function (e) { if (!$('drop').contains(e.target)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if (!$('drop').contains(e.target)) e.preventDefault(); });
+  $('run').addEventListener('click', run);
+  $('clear').addEventListener('click', clearAll);
+})();
+</script>
+</body>
+</html>
