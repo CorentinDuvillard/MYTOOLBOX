@@ -291,6 +291,12 @@
         icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>'
       },
       {
+        id: "bulkunzip", name: "Décompression en masse", tag: "Lot · .zip",
+        type: "iframe", path: "./Bulk%20Unzip.html",
+        desc: "Décompresse jusqu'à 100 archives .zip d'un coup : sortie en un seul .zip fusionné, ou téléchargement séparé de chaque fichier.",
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="M2 8v8l10 5 10-5V8M12 13v8"/></svg>'
+      },
+      {
         id: "imgconvert", name: "Convertisseur d'images", tag: "Image", use: "PNG · JPG · WebP · AVIF",
         type: "iframe", path: "./Image%20Converter.html",
         desc: "Convertit vos images d'un format à l'autre (PNG, JPG, WebP, AVIF), avec réglage de la qualité. 100 % local.",
@@ -502,7 +508,7 @@
       pdf: "pdf", pdforg: "pdf", img2pdf: "pdf", pdf2img: "pdf", pdfnum: "pdf", pdfwm: "pdf", docx: "pdf",
       json: "dev", xml: "dev", yaml: "dev", base64: "dev", hash: "dev", uuidpw: "dev", regex: "dev", diff: "dev", markdown: "dev", units: "dev", sheet: "dev",
       record: "media", media: "media",
-      qr: "utils", archive: "utils", glb: "utils"
+      qr: "utils", archive: "utils", bulkunzip: "utils", glb: "utils"
     };
     var CATEGORIES = [
       { id: "image", name: "Image", desc: "Éditer, convertir, compresser, redimensionner, favicon, EXIF, couleurs.",
